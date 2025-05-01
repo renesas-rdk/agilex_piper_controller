@@ -138,6 +138,15 @@ bool PiperController::enable_arm()
     return false;
   }
 
+  // Reset if current control mode is not 0x01 (CAN instruction control)
+  if ((arm_status_.ctrl_mode != 0x01) && (arm_status_.ctrl_mode != 0x00))
+  {
+    motion_control_1(1);
+    motion_control_1(2);
+    motion_control_2(0, 0, 0, 0);
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+  }
+
   // Create a message to enable all joints
   MsgEnableDisableArm msg_data;
   msg_data.motor_num = 0x07;  // Enable all joints
