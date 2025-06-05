@@ -154,7 +154,7 @@ public:
    * Control the gripper
    *
    * Parameters:
-   *   grippers_angle - Gripper angle in 0.001° units
+   *   grippers_angle - Gripper angle in 0.001° units (mm)
    *   grippers_effort - Gripper torque in 0.001N·m units (range: 0-5000)
    *   status_code - Status code for enable/disable/clear error:
    *                 0x00: Disable
@@ -167,7 +167,7 @@ public:
    *
    * Returns true if successful, false otherwise
    */
-  bool control_gripper(int grippers_angle, uint16_t grippers_effort, uint8_t status_code = 0x01,
+  bool control_gripper(int grippers_angle, uint16_t grippers_effort = 1000, uint8_t status_code = 0x01,
                        uint8_t set_zero = 0x00);
 
   /**
