@@ -1,4 +1,21 @@
+// ********************************************************************************************************************
+// Copyright [2025] Renesas Electronics Corporation and/or its licensors. All Rights Reserved.
+//
+// The contents of this file (the "contents") are proprietary and confidential to Renesas Electronics Corporation
+// and/or its licensors ("Renesas") and subject to statutory and contractual protections.
+//
+// Unless otherwise expressly agreed in writing between Renesas and you: 1) you may not use, copy, modify, distribute,
+// display, or perform the contents; 2) you may not use any name or mark of Renesas for advertising or publicity
+// purposes or in connection with your use of the contents; 3) RENESAS MAKES NO WARRANTY OR REPRESENTATIONS ABOUT THE
+// SUITABILITY OF THE CONTENTS FOR ANY PURPOSE; THE CONTENTS ARE PROVIDED "AS IS" WITHOUT ANY EXPRESS OR IMPLIED
+// WARRANTY, INCLUDING THE IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND
+// NON-INFRINGEMENT; AND 4) RENESAS SHALL NOT BE LIABLE FOR ANY DIRECT, INDIRECT, SPECIAL, OR CONSEQUENTIAL DAMAGES,
+// INCLUDING DAMAGES RESULTING FROM LOSS OF USE, DATA, OR PROJECTS, WHETHER IN AN ACTION OF CONTRACT OR TORT, ARISING
+// OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THE CONTENTS. Third-party contents included in this file may
+// be subject to different terms.
+// ********************************************************************************************************************
 #include "agilex_piper_controller/piper_protocol.hpp"
+
 #include <cstring>
 #include <variant>
 
@@ -8,7 +25,7 @@ namespace piper
 {
 
 // Static methods for byte conversion in PiperProtocolBase
-int32_t PiperProtocolBase::bytes_to_int32(const uint8_t* data)
+int32_t PiperProtocolBase::bytes_to_int32(const uint8_t * data)
 {
   int32_t value = 0;
   value |= static_cast<int32_t>(data[0]) << 24;
@@ -18,7 +35,7 @@ int32_t PiperProtocolBase::bytes_to_int32(const uint8_t* data)
   return value;
 }
 
-int16_t PiperProtocolBase::bytes_to_int16(const uint8_t* data)
+int16_t PiperProtocolBase::bytes_to_int16(const uint8_t * data)
 {
   int16_t value = 0;
   value |= static_cast<int16_t>(data[0]) << 8;
@@ -26,7 +43,7 @@ int16_t PiperProtocolBase::bytes_to_int16(const uint8_t* data)
   return value;
 }
 
-uint32_t PiperProtocolBase::bytes_to_uint32(const uint8_t* data)
+uint32_t PiperProtocolBase::bytes_to_uint32(const uint8_t * data)
 {
   uint32_t value = 0;
   value |= static_cast<uint32_t>(data[0]) << 24;
@@ -36,7 +53,7 @@ uint32_t PiperProtocolBase::bytes_to_uint32(const uint8_t* data)
   return value;
 }
 
-uint16_t PiperProtocolBase::bytes_to_uint16(const uint8_t* data)
+uint16_t PiperProtocolBase::bytes_to_uint16(const uint8_t * data)
 {
   uint16_t value = 0;
   value |= static_cast<uint16_t>(data[0]) << 8;
@@ -44,7 +61,7 @@ uint16_t PiperProtocolBase::bytes_to_uint16(const uint8_t* data)
   return value;
 }
 
-void PiperProtocolBase::int32_to_bytes(int32_t value, uint8_t* data)
+void PiperProtocolBase::int32_to_bytes(int32_t value, uint8_t * data)
 {
   data[0] = static_cast<uint8_t>((value >> 24) & 0xFF);
   data[1] = static_cast<uint8_t>((value >> 16) & 0xFF);
@@ -52,13 +69,13 @@ void PiperProtocolBase::int32_to_bytes(int32_t value, uint8_t* data)
   data[3] = static_cast<uint8_t>(value & 0xFF);
 }
 
-void PiperProtocolBase::int16_to_bytes(int16_t value, uint8_t* data)
+void PiperProtocolBase::int16_to_bytes(int16_t value, uint8_t * data)
 {
   data[0] = static_cast<uint8_t>((value >> 8) & 0xFF);
   data[1] = static_cast<uint8_t>(value & 0xFF);
 }
 
-void PiperProtocolBase::uint32_to_bytes(uint32_t value, uint8_t* data)
+void PiperProtocolBase::uint32_to_bytes(uint32_t value, uint8_t * data)
 {
   data[0] = static_cast<uint8_t>((value >> 24) & 0xFF);
   data[1] = static_cast<uint8_t>((value >> 16) & 0xFF);
@@ -66,23 +83,18 @@ void PiperProtocolBase::uint32_to_bytes(uint32_t value, uint8_t* data)
   data[3] = static_cast<uint8_t>(value & 0xFF);
 }
 
-void PiperProtocolBase::uint16_to_bytes(uint16_t value, uint8_t* data)
+void PiperProtocolBase::uint16_to_bytes(uint16_t value, uint8_t * data)
 {
   data[0] = static_cast<uint8_t>((value >> 8) & 0xFF);
   data[1] = static_cast<uint8_t>(value & 0xFF);
 }
 
 // PiperProtocolV2 implementation
-PiperProtocolV2::PiperProtocolV2()
-{
-}
+PiperProtocolV2::PiperProtocolV2() {}
 
-ProtocolVersion PiperProtocolV2::get_protocol_version() const
-{
-  return ProtocolVersion::V2;
-}
+ProtocolVersion PiperProtocolV2::get_protocol_version() const { return ProtocolVersion::V2; }
 
-bool PiperProtocolV2::encode_message(const PiperMessage& msg, CanFrameMsg& frame)
+bool PiperProtocolV2::encode_message(const PiperMessage & msg, CanFrameMsg & frame)
 {
   CanIdPiper can_id = PiperMessage::message_type_to_can_id(msg.get_type());
   frame.arbitration_id = static_cast<uint32_t>(can_id);
@@ -93,8 +105,7 @@ bool PiperProtocolV2::encode_message(const PiperMessage& msg, CanFrameMsg& frame
   memset(frame.data, 0, 8);
 
   // Encode based on message type
-  switch (msg.get_type())
-  {
+  switch (msg.get_type()) {
     case MessageType::ENABLE_DISABLE_ARM:
       return encode_enable_disable_arm(msg, frame);
     case MessageType::MOTION_CTRL_1:
@@ -128,13 +139,12 @@ bool PiperProtocolV2::encode_message(const PiperMessage& msg, CanFrameMsg& frame
   }
 }
 
-bool PiperProtocolV2::decode_message(const CanFrameMsg& frame, PiperMessage& msg)
+bool PiperProtocolV2::decode_message(const CanFrameMsg & frame, PiperMessage & msg)
 {
   MessageType type = PiperMessage::can_id_to_message_type(frame.arbitration_id);
   msg.set_type(type);
 
-  switch (type)
-  {
+  switch (type) {
     case MessageType::ARM_STATUS:
       return decode_arm_status(frame, msg);
     case MessageType::END_POSE_XY:
@@ -164,10 +174,9 @@ bool PiperProtocolV2::decode_message(const CanFrameMsg& frame, PiperMessage& msg
 
 // Message encoding implementations
 
-bool PiperProtocolV2::encode_enable_disable_arm(const PiperMessage& msg, CanFrameMsg& frame)
+bool PiperProtocolV2::encode_enable_disable_arm(const PiperMessage & msg, CanFrameMsg & frame)
 {
-  if (auto data = std::get_if<MsgEnableDisableArm>(&msg.get_data()))
-  {
+  if (auto data = std::get_if<MsgEnableDisableArm>(&msg.get_data())) {
     frame.data[0] = data->motor_num;
     frame.data[1] = data->enable_flag;
     return true;
@@ -175,10 +184,9 @@ bool PiperProtocolV2::encode_enable_disable_arm(const PiperMessage& msg, CanFram
   return false;
 }
 
-bool PiperProtocolV2::encode_motion_ctrl_1(const PiperMessage& msg, CanFrameMsg& frame)
+bool PiperProtocolV2::encode_motion_ctrl_1(const PiperMessage & msg, CanFrameMsg & frame)
 {
-  if (auto data = std::get_if<MsgMotionCtrl1>(&msg.get_data()))
-  {
+  if (auto data = std::get_if<MsgMotionCtrl1>(&msg.get_data())) {
     frame.data[0] = data->emergency_stop;
     frame.data[1] = data->track_ctrl;
     frame.data[2] = data->grag_teach_ctrl;
@@ -193,10 +201,9 @@ bool PiperProtocolV2::encode_motion_ctrl_1(const PiperMessage& msg, CanFrameMsg&
   return false;
 }
 
-bool PiperProtocolV2::encode_motion_ctrl_2(const PiperMessage& msg, CanFrameMsg& frame)
+bool PiperProtocolV2::encode_motion_ctrl_2(const PiperMessage & msg, CanFrameMsg & frame)
 {
-  if (auto data = std::get_if<MsgMotionCtrl2>(&msg.get_data()))
-  {
+  if (auto data = std::get_if<MsgMotionCtrl2>(&msg.get_data())) {
     frame.data[0] = data->ctrl_mode;
     frame.data[1] = data->move_mode;
     frame.data[2] = data->move_speed_rate;
@@ -211,10 +218,9 @@ bool PiperProtocolV2::encode_motion_ctrl_2(const PiperMessage& msg, CanFrameMsg&
   return false;
 }
 
-bool PiperProtocolV2::encode_cartesian_ctrl_1(const PiperMessage& msg, CanFrameMsg& frame)
+bool PiperProtocolV2::encode_cartesian_ctrl_1(const PiperMessage & msg, CanFrameMsg & frame)
 {
-  if (auto data = std::get_if<MsgCartesianCtrl>(&msg.get_data()))
-  {
+  if (auto data = std::get_if<MsgCartesianCtrl>(&msg.get_data())) {
     PiperProtocolBase::int32_to_bytes(data->axis1, &frame.data[0]);  // X axis
     PiperProtocolBase::int32_to_bytes(data->axis2, &frame.data[4]);  // Y axis
     return true;
@@ -222,10 +228,9 @@ bool PiperProtocolV2::encode_cartesian_ctrl_1(const PiperMessage& msg, CanFrameM
   return false;
 }
 
-bool PiperProtocolV2::encode_cartesian_ctrl_2(const PiperMessage& msg, CanFrameMsg& frame)
+bool PiperProtocolV2::encode_cartesian_ctrl_2(const PiperMessage & msg, CanFrameMsg & frame)
 {
-  if (auto data = std::get_if<MsgCartesianCtrl>(&msg.get_data()))
-  {
+  if (auto data = std::get_if<MsgCartesianCtrl>(&msg.get_data())) {
     PiperProtocolBase::int32_to_bytes(data->axis1, &frame.data[0]);  // Z axis
     PiperProtocolBase::int32_to_bytes(data->axis2, &frame.data[4]);  // RX axis
     return true;
@@ -233,10 +238,9 @@ bool PiperProtocolV2::encode_cartesian_ctrl_2(const PiperMessage& msg, CanFrameM
   return false;
 }
 
-bool PiperProtocolV2::encode_cartesian_ctrl_3(const PiperMessage& msg, CanFrameMsg& frame)
+bool PiperProtocolV2::encode_cartesian_ctrl_3(const PiperMessage & msg, CanFrameMsg & frame)
 {
-  if (auto data = std::get_if<MsgCartesianCtrl>(&msg.get_data()))
-  {
+  if (auto data = std::get_if<MsgCartesianCtrl>(&msg.get_data())) {
     PiperProtocolBase::int32_to_bytes(data->axis1, &frame.data[0]);  // RY axis
     PiperProtocolBase::int32_to_bytes(data->axis2, &frame.data[4]);  // RZ axis
     return true;
@@ -244,10 +248,9 @@ bool PiperProtocolV2::encode_cartesian_ctrl_3(const PiperMessage& msg, CanFrameM
   return false;
 }
 
-bool PiperProtocolV2::encode_joint_ctrl_12(const PiperMessage& msg, CanFrameMsg& frame)
+bool PiperProtocolV2::encode_joint_ctrl_12(const PiperMessage & msg, CanFrameMsg & frame)
 {
-  if (auto data = std::get_if<MsgJointCtrl12>(&msg.get_data()))
-  {
+  if (auto data = std::get_if<MsgJointCtrl12>(&msg.get_data())) {
     PiperProtocolBase::int32_to_bytes(data->joint_1, &frame.data[0]);
     PiperProtocolBase::int32_to_bytes(data->joint_2, &frame.data[4]);
     return true;
@@ -255,10 +258,9 @@ bool PiperProtocolV2::encode_joint_ctrl_12(const PiperMessage& msg, CanFrameMsg&
   return false;
 }
 
-bool PiperProtocolV2::encode_joint_ctrl_34(const PiperMessage& msg, CanFrameMsg& frame)
+bool PiperProtocolV2::encode_joint_ctrl_34(const PiperMessage & msg, CanFrameMsg & frame)
 {
-  if (auto data = std::get_if<MsgJointCtrl34>(&msg.get_data()))
-  {
+  if (auto data = std::get_if<MsgJointCtrl34>(&msg.get_data())) {
     PiperProtocolBase::int32_to_bytes(data->joint_3, &frame.data[0]);
     PiperProtocolBase::int32_to_bytes(data->joint_4, &frame.data[4]);
     return true;
@@ -266,10 +268,9 @@ bool PiperProtocolV2::encode_joint_ctrl_34(const PiperMessage& msg, CanFrameMsg&
   return false;
 }
 
-bool PiperProtocolV2::encode_joint_ctrl_56(const PiperMessage& msg, CanFrameMsg& frame)
+bool PiperProtocolV2::encode_joint_ctrl_56(const PiperMessage & msg, CanFrameMsg & frame)
 {
-  if (auto data = std::get_if<MsgJointCtrl56>(&msg.get_data()))
-  {
+  if (auto data = std::get_if<MsgJointCtrl56>(&msg.get_data())) {
     PiperProtocolBase::int32_to_bytes(data->joint_5, &frame.data[0]);
     PiperProtocolBase::int32_to_bytes(data->joint_6, &frame.data[4]);
     return true;
@@ -277,10 +278,9 @@ bool PiperProtocolV2::encode_joint_ctrl_56(const PiperMessage& msg, CanFrameMsg&
   return false;
 }
 
-bool PiperProtocolV2::encode_gripper_ctrl(const PiperMessage& msg, CanFrameMsg& frame)
+bool PiperProtocolV2::encode_gripper_ctrl(const PiperMessage & msg, CanFrameMsg & frame)
 {
-  if (auto data = std::get_if<MsgGripperCtrl>(&msg.get_data()))
-  {
+  if (auto data = std::get_if<MsgGripperCtrl>(&msg.get_data())) {
     PiperProtocolBase::int32_to_bytes(data->grippers_angle, &frame.data[0]);
     PiperProtocolBase::uint16_to_bytes(data->grippers_effort, &frame.data[4]);
     frame.data[6] = data->status_code;
@@ -290,26 +290,25 @@ bool PiperProtocolV2::encode_gripper_ctrl(const PiperMessage& msg, CanFrameMsg& 
   return false;
 }
 
-bool PiperProtocolV2::encode_joint_config(const PiperMessage& msg, CanFrameMsg& frame)
+bool PiperProtocolV2::encode_joint_config(const PiperMessage & msg, CanFrameMsg & frame)
 {
-  if (auto data = std::get_if<MsgJointConfig>(&msg.get_data()))
-  {
+  if (auto data = std::get_if<MsgJointConfig>(&msg.get_data())) {
     frame.data[0] = data->joint_num;
     frame.data[1] = data->set_zero;
     frame.data[2] = data->acc_param_is_effective;
-    PiperProtocolBase::uint16_to_bytes(data->max_joint_acc, &frame.data[3]);  // Changed from position 4 to position 3
-    frame.data[5] = data->clear_joint_err;                                    // Added field
-    frame.data[6] = 0x00;                                                     // Added zero padding
-    frame.data[7] = 0x00;                                                     // Added zero padding
+    PiperProtocolBase::uint16_to_bytes(
+      data->max_joint_acc, &frame.data[3]);  // Changed from position 4 to position 3
+    frame.data[5] = data->clear_joint_err;   // Added field
+    frame.data[6] = 0x00;                    // Added zero padding
+    frame.data[7] = 0x00;                    // Added zero padding
     return true;
   }
   return false;
 }
 
-bool PiperProtocolV2::encode_crash_protection_config(const PiperMessage& msg, CanFrameMsg& frame)
+bool PiperProtocolV2::encode_crash_protection_config(const PiperMessage & msg, CanFrameMsg & frame)
 {
-  if (auto data = std::get_if<MsgCrashProtectionConfig>(&msg.get_data()))
-  {
+  if (auto data = std::get_if<MsgCrashProtectionConfig>(&msg.get_data())) {
     frame.data[0] = data->j1_level;
     frame.data[1] = data->j2_level;
     frame.data[2] = data->j3_level;
@@ -323,10 +322,9 @@ bool PiperProtocolV2::encode_crash_protection_config(const PiperMessage& msg, Ca
   return false;
 }
 
-bool PiperProtocolV2::encode_master_slave_config(const PiperMessage& msg, CanFrameMsg& frame)
+bool PiperProtocolV2::encode_master_slave_config(const PiperMessage & msg, CanFrameMsg & frame)
 {
-  if (auto data = std::get_if<MsgMasterSlaveConfig>(&msg.get_data()))
-  {
+  if (auto data = std::get_if<MsgMasterSlaveConfig>(&msg.get_data())) {
     frame.data[0] = data->master_slave_mode;
     frame.data[1] = data->teach_mode;
     frame.data[2] = data->user_value1;
@@ -337,10 +335,10 @@ bool PiperProtocolV2::encode_master_slave_config(const PiperMessage& msg, CanFra
   return false;
 }
 
-bool PiperProtocolV2::encode_circular_pattern_coord_update(const PiperMessage& msg, CanFrameMsg& frame)
+bool PiperProtocolV2::encode_circular_pattern_coord_update(
+  const PiperMessage & msg, CanFrameMsg & frame)
 {
-  if (auto data = std::get_if<MsgCircularPatternCoordUpdate>(&msg.get_data()))
-  {
+  if (auto data = std::get_if<MsgCircularPatternCoordUpdate>(&msg.get_data())) {
     frame.data[0] = data->instruction_num;
     return true;
   }
@@ -349,7 +347,7 @@ bool PiperProtocolV2::encode_circular_pattern_coord_update(const PiperMessage& m
 
 // Message decoding implementations
 
-bool PiperProtocolV2::decode_arm_status(const CanFrameMsg& frame, PiperMessage& msg)
+bool PiperProtocolV2::decode_arm_status(const CanFrameMsg & frame, PiperMessage & msg)
 {
   MsgArmStatusFeedback arm_status;
   arm_status.ctrl_mode = frame.data[0];
@@ -364,7 +362,7 @@ bool PiperProtocolV2::decode_arm_status(const CanFrameMsg& frame, PiperMessage& 
   return true;
 }
 
-bool PiperProtocolV2::decode_end_pose_xy(const CanFrameMsg& frame, PiperMessage& msg)
+bool PiperProtocolV2::decode_end_pose_xy(const CanFrameMsg & frame, PiperMessage & msg)
 {
   int32_t x = PiperProtocolBase::bytes_to_int32(&frame.data[0]);
   int32_t y = PiperProtocolBase::bytes_to_int32(&frame.data[4]);
@@ -376,7 +374,7 @@ bool PiperProtocolV2::decode_end_pose_xy(const CanFrameMsg& frame, PiperMessage&
   return true;
 }
 
-bool PiperProtocolV2::decode_end_pose_zrx(const CanFrameMsg& frame, PiperMessage& msg)
+bool PiperProtocolV2::decode_end_pose_zrx(const CanFrameMsg & frame, PiperMessage & msg)
 {
   int32_t z = PiperProtocolBase::bytes_to_int32(&frame.data[0]);
   int32_t rx = PiperProtocolBase::bytes_to_int32(&frame.data[4]);
@@ -388,7 +386,7 @@ bool PiperProtocolV2::decode_end_pose_zrx(const CanFrameMsg& frame, PiperMessage
   return true;
 }
 
-bool PiperProtocolV2::decode_end_pose_ryrz(const CanFrameMsg& frame, PiperMessage& msg)
+bool PiperProtocolV2::decode_end_pose_ryrz(const CanFrameMsg & frame, PiperMessage & msg)
 {
   int32_t ry = PiperProtocolBase::bytes_to_int32(&frame.data[0]);
   int32_t rz = PiperProtocolBase::bytes_to_int32(&frame.data[4]);
@@ -400,7 +398,7 @@ bool PiperProtocolV2::decode_end_pose_ryrz(const CanFrameMsg& frame, PiperMessag
   return true;
 }
 
-bool PiperProtocolV2::decode_joint_12(const CanFrameMsg& frame, PiperMessage& msg)
+bool PiperProtocolV2::decode_joint_12(const CanFrameMsg & frame, PiperMessage & msg)
 {
   MsgJointCtrl12 joints;
   joints.joint_1 = PiperProtocolBase::bytes_to_int32(&frame.data[0]);
@@ -409,7 +407,7 @@ bool PiperProtocolV2::decode_joint_12(const CanFrameMsg& frame, PiperMessage& ms
   return true;
 }
 
-bool PiperProtocolV2::decode_joint_34(const CanFrameMsg& frame, PiperMessage& msg)
+bool PiperProtocolV2::decode_joint_34(const CanFrameMsg & frame, PiperMessage & msg)
 {
   MsgJointCtrl34 joints;
   joints.joint_3 = PiperProtocolBase::bytes_to_int32(&frame.data[0]);
@@ -418,7 +416,7 @@ bool PiperProtocolV2::decode_joint_34(const CanFrameMsg& frame, PiperMessage& ms
   return true;
 }
 
-bool PiperProtocolV2::decode_joint_56(const CanFrameMsg& frame, PiperMessage& msg)
+bool PiperProtocolV2::decode_joint_56(const CanFrameMsg & frame, PiperMessage & msg)
 {
   MsgJointCtrl56 joints;
   joints.joint_5 = PiperProtocolBase::bytes_to_int32(&frame.data[0]);
@@ -427,7 +425,7 @@ bool PiperProtocolV2::decode_joint_56(const CanFrameMsg& frame, PiperMessage& ms
   return true;
 }
 
-bool PiperProtocolV2::decode_gripper(const CanFrameMsg& frame, PiperMessage& msg)
+bool PiperProtocolV2::decode_gripper(const CanFrameMsg & frame, PiperMessage & msg)
 {
   MsgGripperCtrl gripper;
   gripper.grippers_angle = PiperProtocolBase::bytes_to_int32(&frame.data[0]);
@@ -438,7 +436,7 @@ bool PiperProtocolV2::decode_gripper(const CanFrameMsg& frame, PiperMessage& msg
   return true;
 }
 
-bool PiperProtocolV2::decode_motor_info_high_spd(const CanFrameMsg& frame, PiperMessage& msg)
+bool PiperProtocolV2::decode_motor_info_high_spd(const CanFrameMsg & frame, PiperMessage & msg)
 {
   MsgArmHighSpeedFeedback motor_info;
   motor_info.motor_speed = PiperProtocolBase::bytes_to_int16(&frame.data[0]);
@@ -448,7 +446,7 @@ bool PiperProtocolV2::decode_motor_info_high_spd(const CanFrameMsg& frame, Piper
   return true;
 }
 
-bool PiperProtocolV2::decode_motor_info_low_spd(const CanFrameMsg& frame, PiperMessage& msg)
+bool PiperProtocolV2::decode_motor_info_low_spd(const CanFrameMsg & frame, PiperMessage & msg)
 {
   MsgArmLowSpeedFeedback motor_info;
   motor_info.voltage = PiperProtocolBase::bytes_to_uint16(&frame.data[0]);
@@ -460,7 +458,7 @@ bool PiperProtocolV2::decode_motor_info_low_spd(const CanFrameMsg& frame, PiperM
   return true;
 }
 
-bool PiperProtocolV2::decode_firmware_version(const CanFrameMsg& frame, PiperMessage& msg)
+bool PiperProtocolV2::decode_firmware_version(const CanFrameMsg & frame, PiperMessage & msg)
 {
   MsgFirmwareVersion firmware_version;
   memcpy(firmware_version.version_data, frame.data, 8);

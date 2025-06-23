@@ -1,9 +1,25 @@
+// ********************************************************************************************************************
+// Copyright [2025] Renesas Electronics Corporation and/or its licensors. All Rights Reserved.
+//
+// The contents of this file (the "contents") are proprietary and confidential to Renesas Electronics Corporation
+// and/or its licensors ("Renesas") and subject to statutory and contractual protections.
+//
+// Unless otherwise expressly agreed in writing between Renesas and you: 1) you may not use, copy, modify, distribute,
+// display, or perform the contents; 2) you may not use any name or mark of Renesas for advertising or publicity
+// purposes or in connection with your use of the contents; 3) RENESAS MAKES NO WARRANTY OR REPRESENTATIONS ABOUT THE
+// SUITABILITY OF THE CONTENTS FOR ANY PURPOSE; THE CONTENTS ARE PROVIDED "AS IS" WITHOUT ANY EXPRESS OR IMPLIED
+// WARRANTY, INCLUDING THE IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND
+// NON-INFRINGEMENT; AND 4) RENESAS SHALL NOT BE LIABLE FOR ANY DIRECT, INDIRECT, SPECIAL, OR CONSEQUENTIAL DAMAGES,
+// INCLUDING DAMAGES RESULTING FROM LOSS OF USE, DATA, OR PROJECTS, WHETHER IN AN ACTION OF CONTRACT OR TORT, ARISING
+// OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THE CONTENTS. Third-party contents included in this file may
+// be subject to different terms.
+// ********************************************************************************************************************
 #pragma once
 
-#include <cstdint>
-#include <variant>
 #include <array>
+#include <cstdint>
 #include <string>
+#include <variant>
 
 namespace agilex
 {
@@ -482,11 +498,11 @@ struct MsgArmLowSpeedFeedback
                               // bit[1]: Motor over-temperature (0: Normal, 1: Over-temperature)
                               // bit[2]: Drive over-current (0: Normal, 1: Over-current)
                               // bit[3]: Drive over-temperature (0: Normal, 1: Over-temperature)
-                              // bit[4]: Collision protection status (0: Normal, 1: Trigger protection)
-                              // bit[5]: Drive error status (0: Normal, 1: Error)
-                              // bit[6]: Drive enable status (1: Enabled, 0: Disabled)
-                              // bit[7]: Stalling protection status (0: Normal, 1: Trigger protection)
-  uint16_t bus_current;       // Bus current (0.001A)
+  // bit[4]: Collision protection status (0: Normal, 1: Trigger protection)
+  // bit[5]: Drive error status (0: Normal, 1: Error)
+  // bit[6]: Drive enable status (1: Enabled, 0: Disabled)
+  // bit[7]: Stalling protection status (0: Normal, 1: Trigger protection)
+  uint16_t bus_current;  // Bus current (0.001A)
 };
 
 /**
@@ -494,12 +510,12 @@ struct MsgArmLowSpeedFeedback
  *
  * Uses std::variant to hold different message types
  */
-using PiperMessageData =
-    std::variant<std::monostate,  // Empty state
-                 MsgEnableDisableArm, MsgMotionCtrl1, MsgMotionCtrl2, MsgCartesianCtrl, MsgJointCtrl12, MsgJointCtrl34,
-                 MsgJointCtrl56, MsgGripperCtrl, MsgJointConfig, MsgCrashProtectionConfig, MsgMasterSlaveConfig,
-                 MsgCircularPatternCoordUpdate, MsgParamEnquiryConfig, MsgLightCtrl, MsgArmStatusFeedback,
-                 MsgFirmwareVersion, MsgArmHighSpeedFeedback, MsgArmLowSpeedFeedback>;
+using PiperMessageData = std::variant<
+  std::monostate,  // Empty state
+  MsgEnableDisableArm, MsgMotionCtrl1, MsgMotionCtrl2, MsgCartesianCtrl, MsgJointCtrl12,
+  MsgJointCtrl34, MsgJointCtrl56, MsgGripperCtrl, MsgJointConfig, MsgCrashProtectionConfig,
+  MsgMasterSlaveConfig, MsgCircularPatternCoordUpdate, MsgParamEnquiryConfig, MsgLightCtrl,
+  MsgArmStatusFeedback, MsgFirmwareVersion, MsgArmHighSpeedFeedback, MsgArmLowSpeedFeedback>;
 
 /**
  * Piper message class
@@ -524,17 +540,14 @@ public:
    *   type - Message type
    *   data - Message data
    */
-  PiperMessage(MessageType type, const PiperMessageData& data);
+  PiperMessage(MessageType type, const PiperMessageData & data);
 
   /**
    * Get the message type
    *
    * Returns message type
    */
-  MessageType get_type() const
-  {
-    return type_;
-  }
+  MessageType get_type() const { return type_; }
 
   /**
    * Set the message type
@@ -542,20 +555,14 @@ public:
    * Parameters:
    *   type - Message type
    */
-  void set_type(MessageType type)
-  {
-    type_ = type;
-  }
+  void set_type(MessageType type) { type_ = type; }
 
   /**
    * Get the message data
    *
    * Returns message data
    */
-  const PiperMessageData& get_data() const
-  {
-    return data_;
-  }
+  const PiperMessageData & get_data() const { return data_; }
 
   /**
    * Set the message data
@@ -563,10 +570,7 @@ public:
    * Parameters:
    *   data - Message data
    */
-  void set_data(const PiperMessageData& data)
-  {
-    data_ = data;
-  }
+  void set_data(const PiperMessageData & data) { data_ = data; }
 
   /**
    * Convert message type to CAN ID

@@ -5,10 +5,7 @@
   <name>agilex_piper_controller</name>
   <version>0.1.0</version>
   <description>Standard library for Agilex Piper robotic arm control</description>
-
-  <!-- Contact Information -->
   <maintainer email="baoan.du.xj@renesas.com">Baoan Du</maintainer>
-  <author email="baoan.du.xj@renesas.com">Baoan Du</author>
   <license>Apache License 2.0</license>
 
   <!-- Build Dependencies -->

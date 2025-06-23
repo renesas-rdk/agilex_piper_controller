@@ -1,23 +1,41 @@
+// ********************************************************************************************************************
+// Copyright [2025] Renesas Electronics Corporation and/or its licensors. All Rights Reserved.
+//
+// The contents of this file (the "contents") are proprietary and confidential to Renesas Electronics Corporation
+// and/or its licensors ("Renesas") and subject to statutory and contractual protections.
+//
+// Unless otherwise expressly agreed in writing between Renesas and you: 1) you may not use, copy, modify, distribute,
+// display, or perform the contents; 2) you may not use any name or mark of Renesas for advertising or publicity
+// purposes or in connection with your use of the contents; 3) RENESAS MAKES NO WARRANTY OR REPRESENTATIONS ABOUT THE
+// SUITABILITY OF THE CONTENTS FOR ANY PURPOSE; THE CONTENTS ARE PROVIDED "AS IS" WITHOUT ANY EXPRESS OR IMPLIED
+// WARRANTY, INCLUDING THE IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND
+// NON-INFRINGEMENT; AND 4) RENESAS SHALL NOT BE LIABLE FOR ANY DIRECT, INDIRECT, SPECIAL, OR CONSEQUENTIAL DAMAGES,
+// INCLUDING DAMAGES RESULTING FROM LOSS OF USE, DATA, OR PROJECTS, WHETHER IN AN ACTION OF CONTRACT OR TORT, ARISING
+// OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THE CONTENTS. Third-party contents included in this file may
+// be subject to different terms.
+// ********************************************************************************************************************
 #include "agilex_piper_controller/piper_controller.hpp"
-#include <iostream>
-#include <cstring>
-#include <chrono>
-#include <thread>
+
 #include <Eigen/Dense>
+#include <chrono>
+#include <cstring>
+#include <iostream>
+#include <thread>
 
 namespace agilex
 {
 namespace piper
 {
 
-PiperController::PiperController(const std::string& can_interface_name, bool auto_init, int dh_is_offset,
-                                 bool enable_sdk_joint_limits, bool enable_sdk_gripper_limits)
-  : can_interface_name_(can_interface_name)
-  , auto_init_(auto_init)
-  , dh_is_offset_(dh_is_offset)
-  , enable_sdk_joint_limits_(enable_sdk_joint_limits)
-  , enable_sdk_gripper_limits_(enable_sdk_gripper_limits)
-  , running_(false)
+PiperController::PiperController(
+  const std::string & can_interface_name, bool auto_init, int dh_is_offset,
+  bool enable_sdk_joint_limits, bool enable_sdk_gripper_limits)
+: can_interface_name_(can_interface_name),
+  auto_init_(auto_init),
+  dh_is_offset_(dh_is_offset),
+  enable_sdk_joint_limits_(enable_sdk_joint_limits),
+  enable_sdk_gripper_limits_(enable_sdk_gripper_limits),
+  running_(false)
 {
   // Initialize parameters
   parameters_ = std::make_unique<PiperParams>();
@@ -26,7 +44,7 @@ PiperController::PiperController(const std::string& can_interface_name, bool aut
   protocol_ = std::unique_ptr<PiperProtocolBase>(new PiperProtocolV2());
 
   // Define the CAN frame callback
-  auto callback = [this](CanFrameMsg& frame) { this->parse_can_frame(frame); };
+  auto callback = [this](CanFrameMsg & frame) { this->parse_can_frame(frame); };
 
   // Initialize CAN interface
   can_interface_ = std::make_unique<CanInterface>(can_interface_name_, 1000000, callback);
@@ -35,8 +53,7 @@ PiperController::PiperController(const std::string& can_interface_name, bool aut
   firmware_data_.clear();
 
   // Initialize the controller if auto_init is true
-  if (auto_init_)
-  {
+  if (auto_init_) {
     connect_port();
   }
 }
@@ -49,25 +66,21 @@ PiperController::~PiperController()
 
 bool PiperController::connect_port(bool init_can)
 {
-  if (running_)
-  {
+  if (running_) {
     // Already connected
     return true;
   }
 
   // Initialize CAN interface if needed
-  if (init_can)
-  {
-    if (!can_interface_->initialize())
-    {
+  if (init_can) {
+    if (!can_interface_->initialize()) {
       std::cerr << "Failed to initialize CAN interface" << std::endl;
       return false;
     }
   }
 
   // Start the CAN interface
-  if (!can_interface_->start())
-  {
+  if (!can_interface_->start()) {
     std::cerr << "Failed to start CAN interface" << std::endl;
     return false;
   }
@@ -85,19 +98,16 @@ void PiperController::disconnect()
   // Stop monitoring threads
   running_ = false;
 
-  if (read_can_thread_.joinable())
-  {
+  if (read_can_thread_.joinable()) {
     read_can_thread_.join();
   }
 
-  if (can_monitor_thread_.joinable())
-  {
+  if (can_monitor_thread_.joinable()) {
     can_monitor_thread_.join();
   }
 
   // Stop CAN interface
-  if (can_interface_)
-  {
+  if (can_interface_) {
     can_interface_->stop();
   }
 }
@@ -133,14 +143,12 @@ ArmGripper PiperController::get_arm_gripper() const
 
 bool PiperController::enable_arm()
 {
-  if (!is_connected())
-  {
+  if (!is_connected()) {
     return false;
   }
 
   // Reset if current control mode is not 0x01 (CAN instruction control)
-  if ((arm_status_.ctrl_mode != 0x01) && (arm_status_.ctrl_mode != 0x00))
-  {
+  if ((arm_status_.ctrl_mode != 0x01) && (arm_status_.ctrl_mode != 0x00)) {
     motion_control_1(1);
     motion_control_1(2);
     motion_control_2(0, 0, 0, 0);
@@ -153,8 +161,7 @@ bool PiperController::enable_arm()
   msg_data.enable_flag = 0x02;
   PiperMessage msg(MessageType::ENABLE_DISABLE_ARM, msg_data);
   CanFrameMsg can_frame;
-  if (!protocol_->encode_message(msg, can_frame))
-  {
+  if (!protocol_->encode_message(msg, can_frame)) {
     return false;
   }
 
@@ -167,26 +174,22 @@ bool PiperController::enable_arm()
   can_interface_->send_message(can_frame);
 
   // Additional attempts if needed
-  for (int attempt = 1; attempt < MAX_ATTEMPTS; ++attempt)
-  {
+  for (int attempt = 1; attempt < MAX_ATTEMPTS; ++attempt) {
     // Wait for status to update
     std::this_thread::sleep_for(std::chrono::milliseconds(ATTEMPT_INTERVAL_MS));
 
     // Check if all joints are enabled
     bool all_joints_enabled = true;
-    for (uint8_t joint = 1; joint <= 6; ++joint)
-    {
+    for (uint8_t joint = 1; joint <= 6; ++joint) {
       MotorInfo info = get_motor_info(joint);
-      if ((info.drive_status & JOINT_ENABLED_BIT) == 0)
-      {
+      if ((info.drive_status & JOINT_ENABLED_BIT) == 0) {
         all_joints_enabled = false;
         break;
       }
     }
 
     // If all joints are enabled, return success
-    if (all_joints_enabled)
-    {
+    if (all_joints_enabled) {
       return true;
     }
 
@@ -196,13 +199,11 @@ bool PiperController::enable_arm()
 
   // Check one last time if all joints are enabled
   bool final_check = true;
-  for (uint8_t joint = 1; joint <= 6; ++joint)
-  {
+  for (uint8_t joint = 1; joint <= 6; ++joint) {
     MotorInfo info = get_motor_info(joint);
-    if ((info.drive_status & JOINT_ENABLED_BIT) == 0)
-    {
-      std::cerr << "Joint " << static_cast<int>(joint) << " is not enabled after " << MAX_ATTEMPTS << " attempts"
-                << std::endl;
+    if ((info.drive_status & JOINT_ENABLED_BIT) == 0) {
+      std::cerr << "Joint " << static_cast<int>(joint) << " is not enabled after " << MAX_ATTEMPTS
+                << " attempts" << std::endl;
       final_check = false;
     }
   }
@@ -212,8 +213,7 @@ bool PiperController::enable_arm()
 
 bool PiperController::disable_arm()
 {
-  if (!is_connected())
-  {
+  if (!is_connected()) {
     return false;
   }
 
@@ -224,18 +224,17 @@ bool PiperController::disable_arm()
   PiperMessage msg(MessageType::ENABLE_DISABLE_ARM, msg_data);
   CanFrameMsg can_frame;
 
-  if (protocol_->encode_message(msg, can_frame))
-  {
+  if (protocol_->encode_message(msg, can_frame)) {
     return can_interface_->send_message(can_frame);
   }
 
   return false;
 }
 
-bool PiperController::set_mode(uint8_t ctrl_mode, uint8_t move_mode, uint8_t move_speed_rate, uint8_t is_mit_mode)
+bool PiperController::set_mode(
+  uint8_t ctrl_mode, uint8_t move_mode, uint8_t move_speed_rate, uint8_t is_mit_mode)
 {
-  if (!is_connected())
-  {
+  if (!is_connected()) {
     return false;
   }
 
@@ -244,8 +243,7 @@ bool PiperController::set_mode(uint8_t ctrl_mode, uint8_t move_mode, uint8_t mov
 
 bool PiperController::set_end_pose(int x, int y, int z, int rx, int ry, int rz)
 {
-  if (!is_connected())
-  {
+  if (!is_connected()) {
     return false;
   }
 
@@ -259,14 +257,12 @@ bool PiperController::set_end_pose(int x, int y, int z, int rx, int ry, int rz)
 
 bool PiperController::set_joint_angles(int j1, int j2, int j3, int j4, int j5, int j6)
 {
-  if (!is_connected())
-  {
+  if (!is_connected()) {
     return false;
   }
 
   // Apply SDK joint limits if enabled
-  if (enable_sdk_joint_limits_)
-  {
+  if (enable_sdk_joint_limits_) {
     j1 = check_joint_sdk_limit(j1, "joint1");
     j2 = check_joint_sdk_limit(j2, "joint2");
     j3 = check_joint_sdk_limit(j3, "joint3");
@@ -283,11 +279,10 @@ bool PiperController::set_joint_angles(int j1, int j2, int j3, int j4, int j5, i
   return true;
 }
 
-bool PiperController::control_gripper(int grippers_angle, uint16_t grippers_effort, uint8_t status_code,
-                                      uint8_t set_zero)
+bool PiperController::control_gripper(
+  int grippers_angle, uint16_t grippers_effort, uint8_t status_code, uint8_t set_zero)
 {
-  if (!is_connected())
-  {
+  if (!is_connected()) {
     return false;
   }
 
@@ -300,8 +295,7 @@ bool PiperController::control_gripper(int grippers_angle, uint16_t grippers_effo
   PiperMessage msg(MessageType::GRIPPER_CTRL, msg_data);
   CanFrameMsg can_frame;
 
-  if (protocol_->encode_message(msg, can_frame))
-  {
+  if (protocol_->encode_message(msg, can_frame)) {
     return can_interface_->send_message(can_frame);
   }
 
@@ -310,8 +304,7 @@ bool PiperController::control_gripper(int grippers_angle, uint16_t grippers_effo
 
 bool PiperController::move_c_axis_update(uint8_t instruction_num)
 {
-  if (!is_connected())
-  {
+  if (!is_connected()) {
     return false;
   }
 
@@ -321,19 +314,17 @@ bool PiperController::move_c_axis_update(uint8_t instruction_num)
   PiperMessage msg(MessageType::CIRCULAR_PATTERN_COORD_UPDATE, msg_data);
   CanFrameMsg can_frame;
 
-  if (protocol_->encode_message(msg, can_frame))
-  {
+  if (protocol_->encode_message(msg, can_frame)) {
     return can_interface_->send_message(can_frame);
   }
 
   return false;
 }
 
-bool PiperController::configure_joint(uint8_t joint_id, uint8_t enable_pos_lim, uint8_t enable_vel_lim,
-                                      int max_joint_acc)
+bool PiperController::configure_joint(
+  uint8_t joint_id, uint8_t enable_pos_lim, uint8_t enable_vel_lim, int max_joint_acc)
 {
-  if (!is_connected())
-  {
+  if (!is_connected()) {
     return false;
   }
 
@@ -346,19 +337,18 @@ bool PiperController::configure_joint(uint8_t joint_id, uint8_t enable_pos_lim, 
   PiperMessage msg(MessageType::JOINT_CONFIG, msg_data);
   CanFrameMsg can_frame;
 
-  if (protocol_->encode_message(msg, can_frame))
-  {
+  if (protocol_->encode_message(msg, can_frame)) {
     return can_interface_->send_message(can_frame);
   }
 
   return false;
 }
 
-bool PiperController::configure_crash_protection(uint8_t j1_level, uint8_t j2_level, uint8_t j3_level, uint8_t j4_level,
-                                                 uint8_t j5_level, uint8_t j6_level)
+bool PiperController::configure_crash_protection(
+  uint8_t j1_level, uint8_t j2_level, uint8_t j3_level, uint8_t j4_level, uint8_t j5_level,
+  uint8_t j6_level)
 {
-  if (!is_connected())
-  {
+  if (!is_connected()) {
     return false;
   }
 
@@ -373,19 +363,17 @@ bool PiperController::configure_crash_protection(uint8_t j1_level, uint8_t j2_le
   PiperMessage msg(MessageType::CRASH_PROTECTION_CONFIG, msg_data);
   CanFrameMsg can_frame;
 
-  if (protocol_->encode_message(msg, can_frame))
-  {
+  if (protocol_->encode_message(msg, can_frame)) {
     return can_interface_->send_message(can_frame);
   }
 
   return false;
 }
 
-bool PiperController::set_master_slave_config(uint8_t master_slave_mode, uint8_t teach_mode, uint8_t user_value1,
-                                              uint8_t user_value2)
+bool PiperController::set_master_slave_config(
+  uint8_t master_slave_mode, uint8_t teach_mode, uint8_t user_value1, uint8_t user_value2)
 {
-  if (!is_connected())
-  {
+  if (!is_connected()) {
     return false;
   }
 
@@ -398,19 +386,18 @@ bool PiperController::set_master_slave_config(uint8_t master_slave_mode, uint8_t
   PiperMessage msg(MessageType::MASTER_SLAVE_CONFIG, msg_data);
   CanFrameMsg can_frame;
 
-  if (protocol_->encode_message(msg, can_frame))
-  {
+  if (protocol_->encode_message(msg, can_frame)) {
     return can_interface_->send_message(can_frame);
   }
 
   return false;
 }
 
-bool PiperController::motion_control_1(uint8_t emergency_stop, uint8_t track_ctrl, uint8_t grag_teach_ctrl,
-                                       uint8_t trajectory_index, uint16_t name_index)
+bool PiperController::motion_control_1(
+  uint8_t emergency_stop, uint8_t track_ctrl, uint8_t grag_teach_ctrl, uint8_t trajectory_index,
+  uint16_t name_index)
 {
-  if (!is_connected())
-  {
+  if (!is_connected()) {
     return false;
   }
 
@@ -424,19 +411,18 @@ bool PiperController::motion_control_1(uint8_t emergency_stop, uint8_t track_ctr
   PiperMessage msg(MessageType::MOTION_CTRL_1, msg_data);
   CanFrameMsg can_frame;
 
-  if (protocol_->encode_message(msg, can_frame))
-  {
+  if (protocol_->encode_message(msg, can_frame)) {
     return can_interface_->send_message(can_frame);
   }
 
   return false;
 }
 
-bool PiperController::motion_control_2(uint8_t ctrl_mode, uint8_t move_mode, uint8_t move_speed_rate,
-                                       uint8_t is_mit_mode, uint8_t residence_time, uint8_t installation_pos)
+bool PiperController::motion_control_2(
+  uint8_t ctrl_mode, uint8_t move_mode, uint8_t move_speed_rate, uint8_t is_mit_mode,
+  uint8_t residence_time, uint8_t installation_pos)
 {
-  if (!is_connected())
-  {
+  if (!is_connected()) {
     return false;
   }
 
@@ -451,8 +437,7 @@ bool PiperController::motion_control_2(uint8_t ctrl_mode, uint8_t move_mode, uin
   PiperMessage msg(MessageType::MOTION_CTRL_2, msg_data);
   CanFrameMsg can_frame;
 
-  if (protocol_->encode_message(msg, can_frame))
-  {
+  if (protocol_->encode_message(msg, can_frame)) {
     return can_interface_->send_message(can_frame);
   }
 
@@ -464,10 +449,8 @@ std::string PiperController::get_firmware_version()
   std::lock_guard<std::mutex> lock(firmware_mutex_);
 
   std::string version;
-  for (auto byte : firmware_data_)
-  {
-    if (byte != 0)
-    {
+  for (auto byte : firmware_data_) {
+    if (byte != 0) {
       version.push_back(static_cast<char>(byte));
     }
   }
@@ -475,10 +458,9 @@ std::string PiperController::get_firmware_version()
   return version.empty() ? "Unknown" : version;
 }
 
-std::pair<double, double> PiperController::get_sdk_joint_limit_param(const std::string& joint_name)
+std::pair<double, double> PiperController::get_sdk_joint_limit_param(const std::string & joint_name)
 {
-  if (parameters_)
-  {
+  if (parameters_) {
     // Use the updated non-deprecated method
     const auto limits = parameters_->get_joint_limits(joint_name);
     return std::pair<double, double>(limits.min, limits.max);
@@ -488,8 +470,7 @@ std::pair<double, double> PiperController::get_sdk_joint_limit_param(const std::
 
 std::pair<double, double> PiperController::get_sdk_gripper_range_param()
 {
-  if (parameters_)
-  {
+  if (parameters_) {
     // Use the updated non-deprecated method
     const auto range = parameters_->get_gripper_range();
     return std::pair<double, double>(range.min, range.max);
@@ -497,10 +478,10 @@ std::pair<double, double> PiperController::get_sdk_gripper_range_param()
   return std::pair<double, double>(0.0, 0.08);
 }
 
-void PiperController::set_sdk_joint_limit_param(const std::string& joint_name, double min_val, double max_val)
+void PiperController::set_sdk_joint_limit_param(
+  const std::string & joint_name, double min_val, double max_val)
 {
-  if (parameters_)
-  {
+  if (parameters_) {
     // Use the updated non-deprecated method
     parameters_->set_joint_limits(joint_name, min_val, max_val);
   }
@@ -508,25 +489,21 @@ void PiperController::set_sdk_joint_limit_param(const std::string& joint_name, d
 
 void PiperController::set_sdk_gripper_range_param(double min_val, double max_val)
 {
-  if (parameters_)
-  {
+  if (parameters_) {
     // Use the updated non-deprecated method
     parameters_->set_gripper_range(min_val, max_val);
   }
 }
 
-void PiperController::parse_can_frame(CanFrameMsg& frame)
+void PiperController::parse_can_frame(CanFrameMsg & frame)
 {
   PiperMessage msg;
 
-  if (protocol_->decode_message(frame, msg))
-  {
+  if (protocol_->decode_message(frame, msg)) {
     // Handle decoded message based on type
-    switch (msg.get_type())
-    {
+    switch (msg.get_type()) {
       case MessageType::ARM_STATUS:
-        if (auto data = std::get_if<MsgArmStatusFeedback>(&msg.get_data()))
-        {
+        if (auto data = std::get_if<MsgArmStatusFeedback>(&msg.get_data())) {
           std::lock_guard<std::mutex> lock(arm_status_mutex_);
           arm_status_.ctrl_mode = data->ctrl_mode;
           arm_status_.arm_status = data->arm_status;
@@ -540,8 +517,7 @@ void PiperController::parse_can_frame(CanFrameMsg& frame)
         break;
 
       case MessageType::END_POSE_XY:
-        if (auto data = std::get_if<MsgCartesianCtrl>(&msg.get_data()))
-        {
+        if (auto data = std::get_if<MsgCartesianCtrl>(&msg.get_data())) {
           std::lock_guard<std::mutex> lock(arm_end_pose_mutex_);
           arm_end_pose_.x = data->axis1;
           arm_end_pose_.y = data->axis2;
@@ -549,8 +525,7 @@ void PiperController::parse_can_frame(CanFrameMsg& frame)
         break;
 
       case MessageType::END_POSE_ZRX:
-        if (auto data = std::get_if<MsgCartesianCtrl>(&msg.get_data()))
-        {
+        if (auto data = std::get_if<MsgCartesianCtrl>(&msg.get_data())) {
           std::lock_guard<std::mutex> lock(arm_end_pose_mutex_);
           arm_end_pose_.z = data->axis1;
           arm_end_pose_.rx = data->axis2;
@@ -558,8 +533,7 @@ void PiperController::parse_can_frame(CanFrameMsg& frame)
         break;
 
       case MessageType::END_POSE_RYRZ:
-        if (auto data = std::get_if<MsgCartesianCtrl>(&msg.get_data()))
-        {
+        if (auto data = std::get_if<MsgCartesianCtrl>(&msg.get_data())) {
           std::lock_guard<std::mutex> lock(arm_end_pose_mutex_);
           arm_end_pose_.ry = data->axis1;
           arm_end_pose_.rz = data->axis2;
@@ -567,8 +541,7 @@ void PiperController::parse_can_frame(CanFrameMsg& frame)
         break;
 
       case MessageType::JOINT_12:
-        if (auto data = std::get_if<MsgJointCtrl12>(&msg.get_data()))
-        {
+        if (auto data = std::get_if<MsgJointCtrl12>(&msg.get_data())) {
           std::lock_guard<std::mutex> lock(arm_joint_mutex_);
           arm_joint_.j1 = data->joint_1;
           arm_joint_.j2 = data->joint_2;
@@ -576,8 +549,7 @@ void PiperController::parse_can_frame(CanFrameMsg& frame)
         break;
 
       case MessageType::JOINT_34:
-        if (auto data = std::get_if<MsgJointCtrl34>(&msg.get_data()))
-        {
+        if (auto data = std::get_if<MsgJointCtrl34>(&msg.get_data())) {
           std::lock_guard<std::mutex> lock(arm_joint_mutex_);
           arm_joint_.j3 = data->joint_3;
           arm_joint_.j4 = data->joint_4;
@@ -585,8 +557,7 @@ void PiperController::parse_can_frame(CanFrameMsg& frame)
         break;
 
       case MessageType::JOINT_56:
-        if (auto data = std::get_if<MsgJointCtrl56>(&msg.get_data()))
-        {
+        if (auto data = std::get_if<MsgJointCtrl56>(&msg.get_data())) {
           std::lock_guard<std::mutex> lock(arm_joint_mutex_);
           arm_joint_.j5 = data->joint_5;
           arm_joint_.j6 = data->joint_6;
@@ -594,8 +565,7 @@ void PiperController::parse_can_frame(CanFrameMsg& frame)
         break;
 
       case MessageType::GRIPPER:
-        if (auto data = std::get_if<MsgGripperCtrl>(&msg.get_data()))
-        {
+        if (auto data = std::get_if<MsgGripperCtrl>(&msg.get_data())) {
           std::lock_guard<std::mutex> lock(arm_gripper_mutex_);
           arm_gripper_.grippers_angle = data->grippers_angle;
           arm_gripper_.grippers_effort = data->grippers_effort;
@@ -608,8 +578,7 @@ void PiperController::parse_can_frame(CanFrameMsg& frame)
         // Store firmware version bytes properly
         {
           std::lock_guard<std::mutex> lock(firmware_mutex_);
-          if (auto data = std::get_if<MsgFirmwareVersion>(&msg.get_data()))
-          {
+          if (auto data = std::get_if<MsgFirmwareVersion>(&msg.get_data())) {
             firmware_data_.assign(data->version_data, data->version_data + 8);
           }
         }
@@ -620,15 +589,16 @@ void PiperController::parse_can_frame(CanFrameMsg& frame)
         {
           uint8_t joint_num = 0;
 
-          if ((frame.arbitration_id >= static_cast<uint32_t>(CanIdPiper::ARM_INFO_HIGH_SPD_FEEDBACK_1)) &&
-              (frame.arbitration_id <= static_cast<uint32_t>(CanIdPiper::ARM_INFO_HIGH_SPD_FEEDBACK_6)))
-          {
-            joint_num = frame.arbitration_id - static_cast<uint32_t>(CanIdPiper::ARM_INFO_HIGH_SPD_FEEDBACK_1) + 1;
+          if (
+            (frame.arbitration_id >=
+             static_cast<uint32_t>(CanIdPiper::ARM_INFO_HIGH_SPD_FEEDBACK_1)) &&
+            (frame.arbitration_id <=
+             static_cast<uint32_t>(CanIdPiper::ARM_INFO_HIGH_SPD_FEEDBACK_6))) {
+            joint_num = frame.arbitration_id -
+                        static_cast<uint32_t>(CanIdPiper::ARM_INFO_HIGH_SPD_FEEDBACK_1) + 1;
 
-            if (joint_num >= 1 && joint_num <= 6)
-            {
-              if (auto data = std::get_if<MsgArmHighSpeedFeedback>(&msg.get_data()))
-              {
+            if (joint_num >= 1 && joint_num <= 6) {
+              if (auto data = std::get_if<MsgArmHighSpeedFeedback>(&msg.get_data())) {
                 std::lock_guard<std::mutex> lock(motor_info_mutex_);
                 motor_info_[joint_num - 1].position = data->position;
                 motor_info_[joint_num - 1].motor_speed = data->motor_speed;
@@ -644,15 +614,16 @@ void PiperController::parse_can_frame(CanFrameMsg& frame)
         {
           uint8_t joint_num = 0;
 
-          if ((frame.arbitration_id >= static_cast<uint32_t>(CanIdPiper::ARM_INFO_LOW_SPD_FEEDBACK_1)) &&
-              (frame.arbitration_id <= static_cast<uint32_t>(CanIdPiper::ARM_INFO_LOW_SPD_FEEDBACK_6)))
-          {
-            joint_num = frame.arbitration_id - static_cast<uint32_t>(CanIdPiper::ARM_INFO_LOW_SPD_FEEDBACK_1) + 1;
+          if (
+            (frame.arbitration_id >=
+             static_cast<uint32_t>(CanIdPiper::ARM_INFO_LOW_SPD_FEEDBACK_1)) &&
+            (frame.arbitration_id <=
+             static_cast<uint32_t>(CanIdPiper::ARM_INFO_LOW_SPD_FEEDBACK_6))) {
+            joint_num = frame.arbitration_id -
+                        static_cast<uint32_t>(CanIdPiper::ARM_INFO_LOW_SPD_FEEDBACK_1) + 1;
 
-            if (joint_num >= 1 && joint_num <= 6)
-            {
-              if (auto data = std::get_if<MsgArmLowSpeedFeedback>(&msg.get_data()))
-              {
+            if (joint_num >= 1 && joint_num <= 6) {
+              if (auto data = std::get_if<MsgArmLowSpeedFeedback>(&msg.get_data())) {
                 std::lock_guard<std::mutex> lock(motor_info_mutex_);
                 motor_info_[joint_num - 1].voltage = data->voltage;
                 motor_info_[joint_num - 1].drive_temperature = data->drive_temperature;
@@ -674,8 +645,7 @@ void PiperController::parse_can_frame(CanFrameMsg& frame)
 
 void PiperController::read_can_loop()
 {
-  while (running_)
-  {
+  while (running_) {
     // This loop is empty because we use the callback mechanism for reading CAN frames
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
@@ -683,18 +653,14 @@ void PiperController::read_can_loop()
 
 void PiperController::can_monitor_loop()
 {
-  while (running_)
-  {
+  while (running_) {
     // Periodically check CAN connection state
-    if (!can_interface_ || !can_interface_->is_running())
-    {
+    if (!can_interface_ || !can_interface_->is_running()) {
       // Try to reconnect
-      if (can_interface_)
-      {
+      if (can_interface_) {
         can_interface_->stop();
       }
-      if (auto_init_)
-      {
+      if (auto_init_) {
         connect_port(true);
       }
     }
@@ -713,8 +679,7 @@ void PiperController::cartesian_ctrl_xy(int x, int y)
   PiperMessage msg(MessageType::CARTESIAN_CTRL_1, msg_data);
   CanFrameMsg can_frame;
 
-  if (protocol_->encode_message(msg, can_frame))
-  {
+  if (protocol_->encode_message(msg, can_frame)) {
     can_interface_->send_message(can_frame);
   }
 }
@@ -728,8 +693,7 @@ void PiperController::cartesian_ctrl_zrx(int z, int rx)
   PiperMessage msg(MessageType::CARTESIAN_CTRL_2, msg_data);
   CanFrameMsg can_frame;
 
-  if (protocol_->encode_message(msg, can_frame))
-  {
+  if (protocol_->encode_message(msg, can_frame)) {
     can_interface_->send_message(can_frame);
   }
 }
@@ -743,8 +707,7 @@ void PiperController::cartesian_ctrl_ryrz(int ry, int rz)
   PiperMessage msg(MessageType::CARTESIAN_CTRL_3, msg_data);
   CanFrameMsg can_frame;
 
-  if (protocol_->encode_message(msg, can_frame))
-  {
+  if (protocol_->encode_message(msg, can_frame)) {
     can_interface_->send_message(can_frame);
   }
 }
@@ -758,8 +721,7 @@ void PiperController::joint_ctrl_12(int j1, int j2)
   PiperMessage msg(MessageType::JOINT_CTRL_12, msg_data);
   CanFrameMsg can_frame;
 
-  if (protocol_->encode_message(msg, can_frame))
-  {
+  if (protocol_->encode_message(msg, can_frame)) {
     can_interface_->send_message(can_frame);
   }
 }
@@ -773,8 +735,7 @@ void PiperController::joint_ctrl_34(int j3, int j4)
   PiperMessage msg(MessageType::JOINT_CTRL_34, msg_data);
   CanFrameMsg can_frame;
 
-  if (protocol_->encode_message(msg, can_frame))
-  {
+  if (protocol_->encode_message(msg, can_frame)) {
     can_interface_->send_message(can_frame);
   }
 }
@@ -788,16 +749,14 @@ void PiperController::joint_ctrl_56(int j5, int j6)
   PiperMessage msg(MessageType::JOINT_CTRL_56, msg_data);
   CanFrameMsg can_frame;
 
-  if (protocol_->encode_message(msg, can_frame))
-  {
+  if (protocol_->encode_message(msg, can_frame)) {
     can_interface_->send_message(can_frame);
   }
 }
 
-int PiperController::check_joint_sdk_limit(int joint_value, const std::string& joint_name)
+int PiperController::check_joint_sdk_limit(int joint_value, const std::string & joint_name)
 {
-  if (!parameters_)
-  {
+  if (!parameters_) {
     return joint_value;
   }
 
@@ -808,12 +767,9 @@ int PiperController::check_joint_sdk_limit(int joint_value, const std::string& j
   double joint_rad = joint_value * 0.001 * M_PI / 180.0;
 
   // Check limits
-  if (joint_rad < limits.min)
-  {
+  if (joint_rad < limits.min) {
     joint_rad = limits.min;
-  }
-  else if (joint_rad > limits.max)
-  {
+  } else if (joint_rad > limits.max) {
     joint_rad = limits.max;
   }
 
@@ -823,8 +779,7 @@ int PiperController::check_joint_sdk_limit(int joint_value, const std::string& j
 
 MotorInfo PiperController::get_motor_info(uint8_t joint_num) const
 {
-  if (joint_num < 1 || joint_num > 6)
-  {
+  if (joint_num < 1 || joint_num > 6) {
     // Invalid joint number, return empty info
     return MotorInfo{};
   }

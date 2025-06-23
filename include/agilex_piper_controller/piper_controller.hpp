@@ -1,12 +1,28 @@
+// ********************************************************************************************************************
+// Copyright [2025] Renesas Electronics Corporation and/or its licensors. All Rights Reserved.
+//
+// The contents of this file (the "contents") are proprietary and confidential to Renesas Electronics Corporation
+// and/or its licensors ("Renesas") and subject to statutory and contractual protections.
+//
+// Unless otherwise expressly agreed in writing between Renesas and you: 1) you may not use, copy, modify, distribute,
+// display, or perform the contents; 2) you may not use any name or mark of Renesas for advertising or publicity
+// purposes or in connection with your use of the contents; 3) RENESAS MAKES NO WARRANTY OR REPRESENTATIONS ABOUT THE
+// SUITABILITY OF THE CONTENTS FOR ANY PURPOSE; THE CONTENTS ARE PROVIDED "AS IS" WITHOUT ANY EXPRESS OR IMPLIED
+// WARRANTY, INCLUDING THE IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND
+// NON-INFRINGEMENT; AND 4) RENESAS SHALL NOT BE LIABLE FOR ANY DIRECT, INDIRECT, SPECIAL, OR CONSEQUENTIAL DAMAGES,
+// INCLUDING DAMAGES RESULTING FROM LOSS OF USE, DATA, OR PROJECTS, WHETHER IN AN ACTION OF CONTRACT OR TORT, ARISING
+// OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THE CONTENTS. Third-party contents included in this file may
+// be subject to different terms.
+// ********************************************************************************************************************
 #pragma once
 
+#include <array>
+#include <atomic>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
-#include <atomic>
-#include <mutex>
 #include <vector>
-#include <array>
 
 #include "agilex_piper_controller/can_interface.hpp"
 #include "agilex_piper_controller/piper_protocol.hpp"
@@ -35,8 +51,9 @@ public:
    *   enable_sdk_joint_limits - Whether to enable SDK joint limits
    *   enable_sdk_gripper_limits - Whether to enable SDK gripper limits
    */
-  PiperController(const std::string& can_interface_name, bool auto_init = true, int dh_is_offset = 0,
-                  bool enable_sdk_joint_limits = true, bool enable_sdk_gripper_limits = true);
+  PiperController(
+    const std::string & can_interface_name, bool auto_init = true, int dh_is_offset = 0,
+    bool enable_sdk_joint_limits = true, bool enable_sdk_gripper_limits = true);
 
   /**
    * Destructor
@@ -118,7 +135,8 @@ public:
    *
    * Returns true if successful, false otherwise
    */
-  bool set_mode(uint8_t ctrl_mode, uint8_t move_mode, uint8_t move_speed_rate, uint8_t is_mit_mode = 0);
+  bool set_mode(
+    uint8_t ctrl_mode, uint8_t move_mode, uint8_t move_speed_rate, uint8_t is_mit_mode = 0);
 
   /**
    * Set end pose
@@ -167,8 +185,9 @@ public:
    *
    * Returns true if successful, false otherwise
    */
-  bool control_gripper(int grippers_angle, uint16_t grippers_effort = 1000, uint8_t status_code = 0x01,
-                       uint8_t set_zero = 0x00);
+  bool control_gripper(
+    int grippers_angle, uint16_t grippers_effort = 1000, uint8_t status_code = 0x01,
+    uint8_t set_zero = 0x00);
 
   /**
    * Update C-axis movement
@@ -191,7 +210,8 @@ public:
    *
    * Returns true if successful, false otherwise
    */
-  bool configure_joint(uint8_t joint_id, uint8_t enable_pos_lim, uint8_t enable_vel_lim, int max_joint_acc);
+  bool configure_joint(
+    uint8_t joint_id, uint8_t enable_pos_lim, uint8_t enable_vel_lim, int max_joint_acc);
 
   /**
    * Configure crash protection
@@ -206,8 +226,9 @@ public:
    *
    * Returns true if successful, false otherwise
    */
-  bool configure_crash_protection(uint8_t j1_level, uint8_t j2_level, uint8_t j3_level, uint8_t j4_level,
-                                  uint8_t j5_level, uint8_t j6_level);
+  bool configure_crash_protection(
+    uint8_t j1_level, uint8_t j2_level, uint8_t j3_level, uint8_t j4_level, uint8_t j5_level,
+    uint8_t j6_level);
 
   /**
    * Configure master-slave mode
@@ -220,8 +241,9 @@ public:
    *
    * Returns true if successful, false otherwise
    */
-  bool set_master_slave_config(uint8_t master_slave_mode, uint8_t teach_mode, uint8_t user_value1 = 0,
-                               uint8_t user_value2 = 0);
+  bool set_master_slave_config(
+    uint8_t master_slave_mode, uint8_t teach_mode, uint8_t user_value1 = 0,
+    uint8_t user_value2 = 0);
 
   /**
    * Set motion control type 1
@@ -235,8 +257,9 @@ public:
    *
    * Returns true if successful, false otherwise
    */
-  bool motion_control_1(uint8_t emergency_stop, uint8_t track_ctrl = 0, uint8_t grag_teach_ctrl = 0,
-                        uint8_t trajectory_index = 0, uint16_t name_index = 0);
+  bool motion_control_1(
+    uint8_t emergency_stop, uint8_t track_ctrl = 0, uint8_t grag_teach_ctrl = 0,
+    uint8_t trajectory_index = 0, uint16_t name_index = 0);
 
   /**
    * Set motion control type 2
@@ -251,8 +274,9 @@ public:
    *
    * Returns true if successful, false otherwise
    */
-  bool motion_control_2(uint8_t ctrl_mode, uint8_t move_mode, uint8_t move_speed_rate, uint8_t is_mit_mode = 0,
-                        uint8_t residence_time = 0, uint8_t installation_pos = 0);
+  bool motion_control_2(
+    uint8_t ctrl_mode, uint8_t move_mode, uint8_t move_speed_rate, uint8_t is_mit_mode = 0,
+    uint8_t residence_time = 0, uint8_t installation_pos = 0);
 
   /**
    * Get firmware version
@@ -269,7 +293,7 @@ public:
    *
    * Returns pair of minimum and maximum joint angle (radians)
    */
-  [[nodiscard]] std::pair<double, double> get_sdk_joint_limit_param(const std::string& joint_name);
+  [[nodiscard]] std::pair<double, double> get_sdk_joint_limit_param(const std::string & joint_name);
 
   /**
    * Get SDK gripper range parameters
@@ -286,7 +310,7 @@ public:
    *   min_val - Minimum joint angle (radians)
    *   max_val - Maximum joint angle (radians)
    */
-  void set_sdk_joint_limit_param(const std::string& joint_name, double min_val, double max_val);
+  void set_sdk_joint_limit_param(const std::string & joint_name, double min_val, double max_val);
 
   /**
    * Set SDK gripper range parameters
@@ -336,7 +360,7 @@ private:
   std::vector<uint8_t> firmware_data_;   // Firmware data
   std::array<MotorInfo, 6> motor_info_;  // Motor information for joints 1-6
 
-  void parse_can_frame(CanFrameMsg& frame);  // Parse CAN frame
+  void parse_can_frame(CanFrameMsg & frame);  // Parse CAN frame
 
   void read_can_loop();     // Thread function for reading CAN frames
   void can_monitor_loop();  // Thread function for monitoring CAN connection
@@ -350,7 +374,7 @@ private:
   void joint_ctrl_56(int j5, int j6);
 
   // Helper method to check joint limits
-  int check_joint_sdk_limit(int joint_value, const std::string& joint_name);
+  int check_joint_sdk_limit(int joint_value, const std::string & joint_name);
 };
 
 }  // namespace piper

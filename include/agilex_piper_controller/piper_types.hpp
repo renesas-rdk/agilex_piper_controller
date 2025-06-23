@@ -1,3 +1,19 @@
+// ********************************************************************************************************************
+// Copyright [2025] Renesas Electronics Corporation and/or its licensors. All Rights Reserved.
+//
+// The contents of this file (the "contents") are proprietary and confidential to Renesas Electronics Corporation
+// and/or its licensors ("Renesas") and subject to statutory and contractual protections.
+//
+// Unless otherwise expressly agreed in writing between Renesas and you: 1) you may not use, copy, modify, distribute,
+// display, or perform the contents; 2) you may not use any name or mark of Renesas for advertising or publicity
+// purposes or in connection with your use of the contents; 3) RENESAS MAKES NO WARRANTY OR REPRESENTATIONS ABOUT THE
+// SUITABILITY OF THE CONTENTS FOR ANY PURPOSE; THE CONTENTS ARE PROVIDED "AS IS" WITHOUT ANY EXPRESS OR IMPLIED
+// WARRANTY, INCLUDING THE IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND
+// NON-INFRINGEMENT; AND 4) RENESAS SHALL NOT BE LIABLE FOR ANY DIRECT, INDIRECT, SPECIAL, OR CONSEQUENTIAL DAMAGES,
+// INCLUDING DAMAGES RESULTING FROM LOSS OF USE, DATA, OR PROJECTS, WHETHER IN AN ACTION OF CONTRACT OR TORT, ARISING
+// OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THE CONTENTS. Third-party contents included in this file may
+// be subject to different terms.
+// ********************************************************************************************************************
 #pragma once
 
 // Standard library includes
@@ -17,14 +33,14 @@ namespace piper
  */
 struct ArmStatus
 {
-  uint8_t ctrl_mode{ 0 };
-  uint8_t arm_status{ 0 };
-  uint8_t mode_feed{ 0 };
-  uint8_t teach_status{ 0 };
-  uint8_t motion_status{ 0 };
-  uint8_t trajectory_num{ 0 };
-  uint8_t err_code_comm{ 0 };
-  uint8_t err_code_angle{ 0 };
+  uint8_t ctrl_mode{0};
+  uint8_t arm_status{0};
+  uint8_t mode_feed{0};
+  uint8_t teach_status{0};
+  uint8_t motion_status{0};
+  uint8_t trajectory_num{0};
+  uint8_t err_code_comm{0};
+  uint8_t err_code_angle{0};
 };
 
 /**
@@ -32,12 +48,12 @@ struct ArmStatus
  */
 struct ArmEndPose
 {
-  int x{ 0 };   // X position (0.001mm)
-  int y{ 0 };   // Y position (0.001mm)
-  int z{ 0 };   // Z position (0.001mm)
-  int rx{ 0 };  // RX rotation (0.001 degrees)
-  int ry{ 0 };  // RY rotation (0.001 degrees)
-  int rz{ 0 };  // RZ rotation (0.001 degrees)
+  int x{0};   // X position (0.001mm)
+  int y{0};   // Y position (0.001mm)
+  int z{0};   // Z position (0.001mm)
+  int rx{0};  // RX rotation (0.001 degrees)
+  int ry{0};  // RY rotation (0.001 degrees)
+  int rz{0};  // RZ rotation (0.001 degrees)
 };
 
 /**
@@ -45,22 +61,19 @@ struct ArmEndPose
  */
 struct ArmJoint
 {
-  int j1{ 0 };  // Joint 1 angle (0.001 degrees)
-  int j2{ 0 };  // Joint 2 angle (0.001 degrees)
-  int j3{ 0 };  // Joint 3 angle (0.001 degrees)
-  int j4{ 0 };  // Joint 4 angle (0.001 degrees)
-  int j5{ 0 };  // Joint 5 angle (0.001 degrees)
-  int j6{ 0 };  // Joint 6 angle (0.001 degrees)
+  int j1{0};  // Joint 1 angle (0.001 degrees)
+  int j2{0};  // Joint 2 angle (0.001 degrees)
+  int j3{0};  // Joint 3 angle (0.001 degrees)
+  int j4{0};  // Joint 4 angle (0.001 degrees)
+  int j5{0};  // Joint 5 angle (0.001 degrees)
+  int j6{0};  // Joint 6 angle (0.001 degrees)
 
   /**
    * Convert joint angles to vector
    *
    * Returns Vector of joint angles
    */
-  std::vector<int> to_vector() const
-  {
-    return { j1, j2, j3, j4, j5, j6 };
-  }
+  std::vector<int> to_vector() const { return {j1, j2, j3, j4, j5, j6}; }
 
   /**
    * Set joint angles from vector
@@ -68,10 +81,9 @@ struct ArmJoint
    * Parameters:
    *   vec - Vector of joint angles
    */
-  void from_vector(const std::vector<int>& vec)
+  void from_vector(const std::vector<int> & vec)
   {
-    if (vec.size() >= 6)
-    {
+    if (vec.size() >= 6) {
       j1 = vec[0];
       j2 = vec[1];
       j3 = vec[2];
@@ -87,10 +99,10 @@ struct ArmJoint
  */
 struct ArmGripper
 {
-  int32_t grippers_angle{ 0 };    // Gripper position
-  uint16_t grippers_effort{ 0 };  // Gripper speed
-  uint8_t status_code{ 0 };       // Control mode
-  uint8_t set_zero{ 0 };          // Zero set flag
+  int32_t grippers_angle{0};    // Gripper position
+  uint16_t grippers_effort{0};  // Gripper speed
+  uint8_t status_code{0};       // Control mode
+  uint8_t set_zero{0};          // Zero set flag
 };
 
 /**
@@ -109,11 +121,11 @@ struct MotorInfo
                               // bit[1]: Motor over-temperature (0: Normal, 1: Over-temperature)
                               // bit[2]: Drive over-current (0: Normal, 1: Over-current)
                               // bit[3]: Drive over-temperature (0: Normal, 1: Over-temperature)
-                              // bit[4]: Collision protection status (0: Normal, 1: Trigger protection)
-                              // bit[5]: Drive error status (0: Normal, 1: Error)
-                              // bit[6]: Drive enable status (1: Enabled, 0: Disabled)
-                              // bit[7]: Stalling protection status (0: Normal, 1: Trigger protection)
-  uint16_t bus_current;       // Bus current (0.001A)
+  // bit[4]: Collision protection status (0: Normal, 1: Trigger protection)
+  // bit[5]: Drive error status (0: Normal, 1: Error)
+  // bit[6]: Drive enable status (1: Enabled, 0: Disabled)
+  // bit[7]: Stalling protection status (0: Normal, 1: Trigger protection)
+  uint16_t bus_current;  // Bus current (0.001A)
 };
 
 /**
@@ -177,8 +189,8 @@ enum WarningStatus
  */
 struct JointLimits
 {
-  double min{ 0.0 };  // Minimum angle (radians)
-  double max{ 0.0 };  // Maximum angle (radians)
+  double min{0.0};  // Minimum angle (radians)
+  double max{0.0};  // Maximum angle (radians)
 };
 
 /**
@@ -210,7 +222,7 @@ public:
    *
    * Returns joint limits
    */
-  [[nodiscard]] JointLimits get_joint_limits(const std::string& joint_name) const;
+  [[nodiscard]] JointLimits get_joint_limits(const std::string & joint_name) const;
 
   /**
    * Set joint limits
@@ -220,7 +232,7 @@ public:
    *   min - Minimum angle (radians)
    *   max - Maximum angle (radians)
    */
-  void set_joint_limits(const std::string& joint_name, double min, double max);
+  void set_joint_limits(const std::string & joint_name, double min, double max);
 
   /**
    * Get gripper range
@@ -276,8 +288,8 @@ private:
   std::pair<double, double> gripper_range_;
 
   // Whether SDK limits are enabled
-  bool enable_sdk_joint_limits_{ true };
-  bool enable_sdk_gripper_limits_{ true };
+  bool enable_sdk_joint_limits_{true};
+  bool enable_sdk_gripper_limits_{true};
 };
 
 }  // namespace piper
