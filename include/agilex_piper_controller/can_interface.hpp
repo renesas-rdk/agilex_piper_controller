@@ -136,6 +136,7 @@ private:
   std::atomic<bool> running_{false};  // Whether the receive thread is running
   CanFrameCallback callback_;         // Callback for received frames
   std::thread read_thread_;           // Thread for reading CAN frames
+  int lock_fd_;                       // File descriptor for interface configuration lock
 
   /**
    * Thread function for receiving frames
@@ -161,6 +162,11 @@ private:
    * Returns true if successful, false otherwise
    */
   bool set_interface_baudrate(int baudrate);
+
+  /**
+   * Release the lock on the CAN interface
+   */
+  void release_interface_lock();
 };
 
 }  // namespace piper

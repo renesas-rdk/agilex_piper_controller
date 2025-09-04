@@ -21,11 +21,13 @@
 #include <linux/can/raw.h>
 #include <linux/sockios.h>
 #include <net/if.h>
+#include <sys/file.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
 #include <cstring>
+#include <fstream>
 #include <iostream>
 #include <string>
 
@@ -36,13 +38,17 @@ namespace piper
 
 CanInterface::CanInterface(
   const std::string & interface_name, int bitrate, CanFrameCallback callback)
-: interface_name_(interface_name), bitrate_(bitrate), callback_(callback)
+: interface_name_(interface_name), bitrate_(bitrate), callback_(callback), lock_fd_(-1)
 {
   memset(&addr_, 0, sizeof(addr_));
   memset(&ifr_, 0, sizeof(ifr_));
 }
 
-CanInterface::~CanInterface() { stop(); }
+CanInterface::~CanInterface()
+{
+  stop();
+  release_interface_lock();
+}
 
 bool CanInterface::initialize()
 {
@@ -62,26 +68,104 @@ bool CanInterface::initialize()
     return false;
   }
 
-  // Set down the CAN interface to configure baudrate
-  if (!set_interface_state(false)) {
-    std::cerr << "Error setting interface " << interface_name_ << " down" << std::endl;
+  // Try to acquire exclusive lock for interface configuration
+  std::string lock_file = "/var/lock/can_" + interface_name_ + ".lock";
+  std::string ready_file = "/var/lock/can_" + interface_name_ + ".ready";
+
+  lock_fd_ = open(lock_file.c_str(), O_CREAT | O_RDWR, 0644);
+  if (lock_fd_ < 0) {
+    std::cerr << "Error creating lock file: " << strerror(errno) << std::endl;
     close(socket_fd_);
     socket_fd_ = -1;
     return false;
   }
 
-  // Set the baudrate using system command
-  if (!set_interface_baudrate(bitrate_)) {
-    std::cerr << "Error setting interface " << interface_name_ << " baudrate to " << bitrate_
+  // Try to acquire exclusive lock (non-blocking first to check)
+  if (flock(lock_fd_, LOCK_EX | LOCK_NB) == 0) {
+    // We got the lock immediately, so we're the first process
+    std::cout << "First process to configure CAN interface " << interface_name_ << std::endl;
+
+    // Remove any stale ready file
+    unlink(ready_file.c_str());
+
+    // Set down the CAN interface to configure baudrate
+    if (!set_interface_state(false)) {
+      std::cerr << "Error setting interface " << interface_name_ << " down" << std::endl;
+      release_interface_lock();
+      close(socket_fd_);
+      socket_fd_ = -1;
+      return false;
+    }
+
+    // Set the baudrate using system command
+    if (!set_interface_baudrate(bitrate_)) {
+      std::cerr << "Error setting interface " << interface_name_ << " baudrate to " << bitrate_
+                << std::endl;
+      release_interface_lock();
+      close(socket_fd_);
+      socket_fd_ = -1;
+      return false;
+    }
+
+    // Set up the CAN interface after configuring baudrate
+    if (!set_interface_state(true)) {
+      std::cerr << "Error setting interface " << interface_name_ << " up" << std::endl;
+      release_interface_lock();
+      close(socket_fd_);
+      socket_fd_ = -1;
+      return false;
+    }
+
+    // Write our PID to the lock file to indicate who configured it
+    std::string pid_str = std::to_string(getpid()) + "\n";
+    lseek(lock_fd_, 0, SEEK_SET);
+    ftruncate(lock_fd_, 0);
+    write(lock_fd_, pid_str.c_str(), pid_str.length());
+
+    // Create ready file to signal initialization is complete
+    int ready_fd = open(ready_file.c_str(), O_CREAT | O_WRONLY, 0644);
+    if (ready_fd >= 0) {
+      write(ready_fd, "1", 1);
+      close(ready_fd);
+    }
+
+    std::cout << "CAN interface " << interface_name_ << " configuration complete" << std::endl;
+
+  } else if (errno == EWOULDBLOCK) {
+    // Another process has the lock, wait for it to complete
+    std::cout << "Waiting for another process to configure CAN interface " << interface_name_
               << std::endl;
-    close(socket_fd_);
-    socket_fd_ = -1;
-    return false;
-  }
 
-  // Set up the CAN interface after configuring baudrate
-  if (!set_interface_state(true)) {
-    std::cerr << "Error setting interface " << interface_name_ << " up" << std::endl;
+    // Release our lock fd and wait
+    close(lock_fd_);
+    lock_fd_ = -1;
+
+    // Wait for the ready file to appear (with timeout)
+    int wait_count = 0;
+    const int max_wait = 100;  // 10 seconds (100 * 100ms)
+
+    while (wait_count < max_wait) {
+      if (access(ready_file.c_str(), F_OK) == 0) {
+        std::cout << "CAN interface " << interface_name_
+                  << " is ready (configured by another process)" << std::endl;
+        break;
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      wait_count++;
+    }
+
+    if (wait_count >= max_wait) {
+      std::cerr << "Timeout waiting for CAN interface " << interface_name_ << " to be configured"
+                << std::endl;
+      close(socket_fd_);
+      socket_fd_ = -1;
+      return false;
+    }
+
+  } else {
+    std::cerr << "Error checking lock: " << strerror(errno) << std::endl;
+    close(lock_fd_);
+    lock_fd_ = -1;
     close(socket_fd_);
     socket_fd_ = -1;
     return false;
@@ -93,6 +177,7 @@ bool CanInterface::initialize()
   if (bind(socket_fd_, (struct sockaddr *)&addr_, sizeof(addr_)) < 0) {
     std::cerr << "Error binding socket to interface " << interface_name_ << ": " << strerror(errno)
               << std::endl;
+    release_interface_lock();
     close(socket_fd_);
     socket_fd_ = -1;
     return false;
@@ -157,6 +242,8 @@ void CanInterface::stop()
     close(socket_fd_);
     socket_fd_ = -1;
   }
+
+  release_interface_lock();
 }
 
 bool CanInterface::is_running() const { return running_; }
@@ -210,6 +297,19 @@ void CanInterface::read_loop()
       // Sleep a bit to prevent CPU hogging
       std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
+  }
+}
+
+void CanInterface::release_interface_lock()
+{
+  if (lock_fd_ >= 0) {
+    // If we're releasing the lock, also remove the ready file
+    std::string ready_file = "/var/lock/can_" + interface_name_ + ".ready";
+    unlink(ready_file.c_str());
+
+    flock(lock_fd_, LOCK_UN);
+    close(lock_fd_);
+    lock_fd_ = -1;
   }
 }
 
