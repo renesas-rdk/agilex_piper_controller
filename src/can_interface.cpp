@@ -119,13 +119,19 @@ bool CanInterface::initialize()
     // Write our PID to the lock file to indicate who configured it
     std::string pid_str = std::to_string(getpid()) + "\n";
     lseek(lock_fd_, 0, SEEK_SET);
-    ftruncate(lock_fd_, 0);
-    write(lock_fd_, pid_str.c_str(), pid_str.length());
+    if (ftruncate(lock_fd_, 0) == -1) {
+      std::cerr << "Warning: Failed to truncate lock file" << std::endl;
+    }
+    if (write(lock_fd_, pid_str.c_str(), pid_str.length()) == -1) {
+      std::cerr << "Warning: Failed to write PID to lock file" << std::endl;
+    }
 
     // Create ready file to signal initialization is complete
     int ready_fd = open(ready_file.c_str(), O_CREAT | O_WRONLY, 0644);
     if (ready_fd >= 0) {
-      write(ready_fd, "1", 1);
+      if (write(ready_fd, "1", 1) == -1) {
+        std::cerr << "Warning: Failed to write to ready file" << std::endl;
+      }
       close(ready_fd);
     }
 
