@@ -1,0 +1,21 @@
+[workspace]
+name = "agilex_piper_controller"
+version = "0.1.0"
+description = "Pixi environment for building agilex_piper_controller"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+cxx-compiler = "*"
+cmake = ">=3.8"
+ninja = "*"
+make = "*"
+pkg-config = "*"
+eigen = "*"
+
+[tasks]
+configure = "cmake -S . -B .pixi/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PIXI_PROJECT_ROOT/.pixi/install"
+build = "cmake --build .pixi/build --parallel"
+install = "cmake --install .pixi/build"
+test = "ctest --test-dir .pixi/build --output-on-failure"
+clean = "rm -rf .pixi/build .pixi/install"

@@ -268,6 +268,10 @@ bool CanInterface::send_message(uint32_t id, const uint8_t * data, uint8_t dlc)
 
   ssize_t nbytes = write(socket_fd_, &frame, sizeof(struct can_frame));
   if (nbytes != sizeof(struct can_frame)) {
+    // ENOBUFS/EAGAIN happens during overload; caller should handle as a normal send failure.
+    if (errno == ENOBUFS || errno == EAGAIN || errno == EWOULDBLOCK) {
+      return false;
+    }
     std::cerr << "Error sending CAN message: " << strerror(errno) << std::endl;
     return false;
   }

@@ -7,7 +7,7 @@ This package provides a C++ implementation of the controller for the Agilex Pipe
 ## Features
 
 - **C++ Native Implementation**: Complete rewrite of the Python SDK in C++
-- **ROS 2 Compatible**: Designed to work within the ROS 2 ecosystem
+- **Pure CMake Project**: No ROS runtime/build dependency required
 - **CAN Communication**: Direct CAN bus communication with the Piper arm
 - **Simplified API**: Focuses on core functionality for easier integration
 
@@ -24,20 +24,42 @@ The controller is structured around several key components:
 
 ### Prerequisites
 
-- ROS 2 (tested with Jazzy)
 - Linux with socketCAN support
-- Eigen library
+- C++17 compiler
+- CMake (>= 3.8)
+- Eigen3
 
 ### Building
 
 ```bash
-# Clone the repository into your ROS 2 workspace
-cd ~/ros2_ws/src
-git clone <repository-url> agilex_piper_controller
+# Configure
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 
-# Build the package
-cd ..
-colcon build --packages-select agilex_piper_controller
+# Build
+cmake --build build --parallel
+```
+
+### Building with Pixi
+
+```bash
+# Configure once
+pixi run configure
+
+# Build
+pixi run build
+
+# Install to .pixi/install
+pixi run install
+```
+
+Useful commands:
+
+```bash
+# Run tests (if/when tests are added)
+pixi run test
+
+# Remove build artifacts created by Pixi tasks
+pixi run clean
 ```
 
 ## Usage

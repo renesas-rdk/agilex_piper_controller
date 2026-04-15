@@ -248,11 +248,11 @@ bool PiperController::set_end_pose(int x, int y, int z, int rx, int ry, int rz)
   }
 
   // Send the pose in three separate messages (XY, ZRX, RYRZ)
-  cartesian_ctrl_xy(x, y);
-  cartesian_ctrl_zrx(z, rx);
-  cartesian_ctrl_ryrz(ry, rz);
+  const bool ok_xy = cartesian_ctrl_xy(x, y);
+  const bool ok_zrx = cartesian_ctrl_zrx(z, rx);
+  const bool ok_ryrz = cartesian_ctrl_ryrz(ry, rz);
 
-  return true;
+  return ok_xy && ok_zrx && ok_ryrz;
 }
 
 bool PiperController::set_joint_angles(int j1, int j2, int j3, int j4, int j5, int j6)
@@ -272,11 +272,11 @@ bool PiperController::set_joint_angles(int j1, int j2, int j3, int j4, int j5, i
   }
 
   // Send joint commands in three separate messages (J12, J34, J56)
-  joint_ctrl_12(j1, j2);
-  joint_ctrl_34(j3, j4);
-  joint_ctrl_56(j5, j6);
+  const bool ok_12 = joint_ctrl_12(j1, j2);
+  const bool ok_34 = joint_ctrl_34(j3, j4);
+  const bool ok_56 = joint_ctrl_56(j5, j6);
 
-  return true;
+  return ok_12 && ok_34 && ok_56;
 }
 
 bool PiperController::control_gripper(
@@ -670,7 +670,7 @@ void PiperController::can_monitor_loop()
   }
 }
 
-void PiperController::cartesian_ctrl_xy(int x, int y)
+bool PiperController::cartesian_ctrl_xy(int x, int y)
 {
   MsgCartesianCtrl msg_data;
   msg_data.axis1 = x;
@@ -679,12 +679,14 @@ void PiperController::cartesian_ctrl_xy(int x, int y)
   PiperMessage msg(MessageType::CARTESIAN_CTRL_1, msg_data);
   CanFrameMsg can_frame;
 
-  if (protocol_->encode_message(msg, can_frame)) {
-    can_interface_->send_message(can_frame);
+  if (!protocol_->encode_message(msg, can_frame)) {
+    return false;
   }
+
+  return can_interface_->send_message(can_frame);
 }
 
-void PiperController::cartesian_ctrl_zrx(int z, int rx)
+bool PiperController::cartesian_ctrl_zrx(int z, int rx)
 {
   MsgCartesianCtrl msg_data;
   msg_data.axis1 = z;
@@ -693,12 +695,14 @@ void PiperController::cartesian_ctrl_zrx(int z, int rx)
   PiperMessage msg(MessageType::CARTESIAN_CTRL_2, msg_data);
   CanFrameMsg can_frame;
 
-  if (protocol_->encode_message(msg, can_frame)) {
-    can_interface_->send_message(can_frame);
+  if (!protocol_->encode_message(msg, can_frame)) {
+    return false;
   }
+
+  return can_interface_->send_message(can_frame);
 }
 
-void PiperController::cartesian_ctrl_ryrz(int ry, int rz)
+bool PiperController::cartesian_ctrl_ryrz(int ry, int rz)
 {
   MsgCartesianCtrl msg_data;
   msg_data.axis1 = ry;
@@ -707,12 +711,14 @@ void PiperController::cartesian_ctrl_ryrz(int ry, int rz)
   PiperMessage msg(MessageType::CARTESIAN_CTRL_3, msg_data);
   CanFrameMsg can_frame;
 
-  if (protocol_->encode_message(msg, can_frame)) {
-    can_interface_->send_message(can_frame);
+  if (!protocol_->encode_message(msg, can_frame)) {
+    return false;
   }
+
+  return can_interface_->send_message(can_frame);
 }
 
-void PiperController::joint_ctrl_12(int j1, int j2)
+bool PiperController::joint_ctrl_12(int j1, int j2)
 {
   MsgJointCtrl12 msg_data;
   msg_data.joint_1 = j1;
@@ -721,12 +727,14 @@ void PiperController::joint_ctrl_12(int j1, int j2)
   PiperMessage msg(MessageType::JOINT_CTRL_12, msg_data);
   CanFrameMsg can_frame;
 
-  if (protocol_->encode_message(msg, can_frame)) {
-    can_interface_->send_message(can_frame);
+  if (!protocol_->encode_message(msg, can_frame)) {
+    return false;
   }
+
+  return can_interface_->send_message(can_frame);
 }
 
-void PiperController::joint_ctrl_34(int j3, int j4)
+bool PiperController::joint_ctrl_34(int j3, int j4)
 {
   MsgJointCtrl34 msg_data;
   msg_data.joint_3 = j3;
@@ -735,12 +743,14 @@ void PiperController::joint_ctrl_34(int j3, int j4)
   PiperMessage msg(MessageType::JOINT_CTRL_34, msg_data);
   CanFrameMsg can_frame;
 
-  if (protocol_->encode_message(msg, can_frame)) {
-    can_interface_->send_message(can_frame);
+  if (!protocol_->encode_message(msg, can_frame)) {
+    return false;
   }
+
+  return can_interface_->send_message(can_frame);
 }
 
-void PiperController::joint_ctrl_56(int j5, int j6)
+bool PiperController::joint_ctrl_56(int j5, int j6)
 {
   MsgJointCtrl56 msg_data;
   msg_data.joint_5 = j5;
@@ -749,9 +759,11 @@ void PiperController::joint_ctrl_56(int j5, int j6)
   PiperMessage msg(MessageType::JOINT_CTRL_56, msg_data);
   CanFrameMsg can_frame;
 
-  if (protocol_->encode_message(msg, can_frame)) {
-    can_interface_->send_message(can_frame);
+  if (!protocol_->encode_message(msg, can_frame)) {
+    return false;
   }
+
+  return can_interface_->send_message(can_frame);
 }
 
 int PiperController::check_joint_sdk_limit(int joint_value, const std::string & joint_name)

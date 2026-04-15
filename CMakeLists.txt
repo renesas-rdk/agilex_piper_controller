@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.10)
 project(agilex_piper_controller)
 
 # Build settings
@@ -12,7 +12,6 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 # Dependencies
-find_package(ament_cmake REQUIRED)
 find_package(Eigen3 REQUIRED)
 
 # Library
@@ -36,21 +35,19 @@ target_include_directories(${PROJECT_NAME}
 # Link dependencies
 target_link_libraries(${PROJECT_NAME}
   PUBLIC
-    ${EIGEN3_LIBRARIES}
+    Eigen3::Eigen
 )
 
-target_include_directories(${PROJECT_NAME} SYSTEM
-  PUBLIC
-    ${EIGEN3_INCLUDE_DIRS}
-)
+enable_testing()
+add_subdirectory(tests)
 
 # Installation
 install(
   TARGETS ${PROJECT_NAME}
-  EXPORT ${PROJECT_NAME}
+  EXPORT ${PROJECT_NAME}Targets
   LIBRARY DESTINATION lib
   ARCHIVE DESTINATION lib
-  RUNTIME DESTINATION lib/${PROJECT_NAME}
+  RUNTIME DESTINATION bin
 )
 
 install(
@@ -58,15 +55,8 @@ install(
   DESTINATION include
 )
 
-# Export
-ament_export_include_directories(include)
-ament_export_libraries(${PROJECT_NAME})
-ament_export_targets(${PROJECT_NAME})
-
-# Testing
-if(BUILD_TESTING)
-  find_package(ament_lint_auto REQUIRED)
-  ament_lint_auto_find_test_dependencies()
-endif()
-
-ament_package()
+install(
+  EXPORT ${PROJECT_NAME}Targets
+  NAMESPACE ${PROJECT_NAME}::
+  DESTINATION lib/cmake/${PROJECT_NAME}
+)

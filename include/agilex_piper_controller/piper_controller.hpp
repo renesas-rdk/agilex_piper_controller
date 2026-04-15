@@ -366,12 +366,12 @@ private:
   void can_monitor_loop();  // Thread function for monitoring CAN connection
 
   // Helper methods for sending commands
-  void cartesian_ctrl_xy(int x, int y);
-  void cartesian_ctrl_zrx(int z, int rx);
-  void cartesian_ctrl_ryrz(int ry, int rz);
-  void joint_ctrl_12(int j1, int j2);
-  void joint_ctrl_34(int j3, int j4);
-  void joint_ctrl_56(int j5, int j6);
+  bool cartesian_ctrl_xy(int x, int y);
+  bool cartesian_ctrl_zrx(int z, int rx);
+  bool cartesian_ctrl_ryrz(int ry, int rz);
+  bool joint_ctrl_12(int j1, int j2);
+  bool joint_ctrl_34(int j3, int j4);
+  bool joint_ctrl_56(int j5, int j6);
 
   // Helper method to check joint limits
   int check_joint_sdk_limit(int joint_value, const std::string & joint_name);
