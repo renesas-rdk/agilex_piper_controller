@@ -90,7 +90,7 @@ void PiperProtocolBase::uint16_to_bytes(uint16_t value, uint8_t * data)
 }
 
 // PiperProtocolV2 implementation
-PiperProtocolV2::PiperProtocolV2() {}
+PiperProtocolV2::PiperProtocolV2(const MitConfig & mit_cfg) : mit_cfg_(mit_cfg) {}
 
 ProtocolVersion PiperProtocolV2::get_protocol_version() const { return ProtocolVersion::V2; }
 
@@ -134,6 +134,14 @@ bool PiperProtocolV2::encode_message(const PiperMessage & msg, CanFrameMsg & fra
       return encode_master_slave_config(msg, frame);
     case MessageType::CIRCULAR_PATTERN_COORD_UPDATE:
       return encode_circular_pattern_coord_update(msg, frame);
+    // MIT per-joint commands all use the same encoder; the CAN ID is already set above.
+    case MessageType::JOINT_MIT_CTRL_1:
+    case MessageType::JOINT_MIT_CTRL_2:
+    case MessageType::JOINT_MIT_CTRL_3:
+    case MessageType::JOINT_MIT_CTRL_4:
+    case MessageType::JOINT_MIT_CTRL_5:
+    case MessageType::JOINT_MIT_CTRL_6:
+      return encode_joint_mit_ctrl(msg, frame);
     default:
       return false;
   }
@@ -167,6 +175,13 @@ bool PiperProtocolV2::decode_message(const CanFrameMsg & frame, PiperMessage & m
       return decode_motor_info_low_spd(frame, msg);
     case MessageType::FIRMWARE_VERSION:
       return decode_firmware_version(frame, msg);
+    case MessageType::JOINT_VEL_ACC_1:
+    case MessageType::JOINT_VEL_ACC_2:
+    case MessageType::JOINT_VEL_ACC_3:
+    case MessageType::JOINT_VEL_ACC_4:
+    case MessageType::JOINT_VEL_ACC_5:
+    case MessageType::JOINT_VEL_ACC_6:
+      return decode_joint_vel_acc(frame, msg);
     default:
       return false;
   }
@@ -463,6 +478,45 @@ bool PiperProtocolV2::decode_firmware_version(const CanFrameMsg & frame, PiperMe
   MsgFirmwareVersion firmware_version;
   memcpy(firmware_version.version_data, frame.data, 8);
   msg.set_data(firmware_version);
+  return true;
+}
+
+bool PiperProtocolV2::decode_joint_vel_acc(const CanFrameMsg & frame, PiperMessage & msg)
+{
+  MsgJointVelAccFeedback fb;
+  fb.joint_vel = PiperProtocolBase::bytes_to_int32(&frame.data[0]);
+  fb.joint_acc = PiperProtocolBase::bytes_to_int32(&frame.data[4]);
+  msg.set_data(fb);
+  return true;
+}
+
+bool PiperProtocolV2::encode_joint_mit_ctrl(const PiperMessage & msg, CanFrameMsg & frame)
+{
+  auto data = std::get_if<MsgJointMitCtrl>(&msg.get_data());
+  if (!data) {
+    return false;
+  }
+
+  // Pack five fixed-point values into 8 bytes:
+  //   data[0..1]              pos_int  (16-bit)
+  //   data[2] + data[3][7:4]  vel_int  (12-bit)
+  //   data[3][3:0] + data[4]  kp_int   (12-bit)
+  //   data[5] + data[6][7:4]  kd_int   (12-bit)
+  //   data[6][3:0] + data[7]  tau_int  (12-bit)
+  const uint16_t p = data->pos_int;
+  const uint16_t v = data->vel_int;
+  const uint16_t kp = data->kp_int;
+  const uint16_t kd = data->kd_int;
+  const uint16_t t = data->tau_int;
+
+  frame.data[0] = static_cast<uint8_t>(p >> 8);
+  frame.data[1] = static_cast<uint8_t>(p & 0xFF);
+  frame.data[2] = static_cast<uint8_t>(v >> 4);
+  frame.data[3] = static_cast<uint8_t>(((v & 0xF) << 4) | (kp >> 8));
+  frame.data[4] = static_cast<uint8_t>(kp & 0xFF);
+  frame.data[5] = static_cast<uint8_t>(kd >> 4);
+  frame.data[6] = static_cast<uint8_t>(((kd & 0xF) << 4) | (t >> 8));
+  frame.data[7] = static_cast<uint8_t>(t & 0xFF);
   return true;
 }
 

@@ -42,7 +42,7 @@ enum class CanIdPiper : uint32_t
   ARM_JOINT_CTRL_56 = 0x157,
   ARM_CIRCULAR_PATTERN_COORD_NUM_UPDATE_CTRL = 0x158,
   ARM_GRIPPER_CTRL = 0x159,
-  // MIT control (V1.5-2 and later)
+  // MIT mode control (firmware V1.5-2 and later) — one frame per joint
   ARM_JOINT_MIT_CTRL_1 = 0x15A,
   ARM_JOINT_MIT_CTRL_2 = 0x15B,
   ARM_JOINT_MIT_CTRL_3 = 0x15C,
@@ -147,6 +147,22 @@ enum class MessageType
   // Generic motor info types
   MOTOR_INFO_HIGH_SPD,
   MOTOR_INFO_LOW_SPD,
+
+  // Joint velocity+acceleration feedback (0x481–0x486)
+  JOINT_VEL_ACC_1,
+  JOINT_VEL_ACC_2,
+  JOINT_VEL_ACC_3,
+  JOINT_VEL_ACC_4,
+  JOINT_VEL_ACC_5,
+  JOINT_VEL_ACC_6,
+
+  // MIT control commands (one per joint, 0x15A–0x15F)
+  JOINT_MIT_CTRL_1,
+  JOINT_MIT_CTRL_2,
+  JOINT_MIT_CTRL_3,
+  JOINT_MIT_CTRL_4,
+  JOINT_MIT_CTRL_5,
+  JOINT_MIT_CTRL_6,
 
   FIRMWARE_VERSION,
 };
@@ -506,6 +522,43 @@ struct MsgArmLowSpeedFeedback
 };
 
 /**
+ * MIT-mode per-joint control frame
+ *
+ * CAN IDs: 0x15A (J1) … 0x15F (J6)
+ *
+ * Packed layout (64 bits, big-endian):
+ *   bits[63:48] pos_int   – 16-bit position,  range ±pos_max [rad]
+ *   bits[47:36] vel_int   – 12-bit velocity,  range ±vel_max [rad/s]
+ *   bits[35:24] kp_int    – 12-bit kp,        range [0, kp_max] [Nm/rad]
+ *   bits[23:12] kd_int    – 12-bit kd,        range [0, kd_max] [Nms/rad]
+ *   bits[11:0]  tau_int   – 12-bit torque ff, range ±tau_max [Nm]
+ *
+ * Encoding: val_int = (val - min) / range * (2^N - 1)
+ */
+struct MsgJointMitCtrl
+{
+  uint16_t pos_int{0};   // 16-bit position integer
+  uint16_t vel_int{0};   // 12-bit velocity integer
+  uint16_t kp_int{0};    // 12-bit kp integer
+  uint16_t kd_int{0};    // 12-bit kd integer
+  uint16_t tau_int{0};   // 12-bit torque-ff integer
+};
+
+/**
+ * Joint velocity + acceleration feedback
+ *
+ * CAN IDs: 0x481 (J1) … 0x486 (J6)
+ *
+ * byte 0-3: joint velocity   (0.001 deg/s, int32)
+ * byte 4-7: joint acceleration (0.001 deg/s², int32)
+ */
+struct MsgJointVelAccFeedback
+{
+  int32_t joint_vel{0};   // Joint velocity  (0.001 deg/s)
+  int32_t joint_acc{0};   // Joint acceleration (0.001 deg/s²)
+};
+
+/**
  * Piper message variant
  *
  * Uses std::variant to hold different message types
@@ -515,7 +568,8 @@ using PiperMessageData = std::variant<
   MsgEnableDisableArm, MsgMotionCtrl1, MsgMotionCtrl2, MsgCartesianCtrl, MsgJointCtrl12,
   MsgJointCtrl34, MsgJointCtrl56, MsgGripperCtrl, MsgJointConfig, MsgCrashProtectionConfig,
   MsgMasterSlaveConfig, MsgCircularPatternCoordUpdate, MsgParamEnquiryConfig, MsgLightCtrl,
-  MsgArmStatusFeedback, MsgFirmwareVersion, MsgArmHighSpeedFeedback, MsgArmLowSpeedFeedback>;
+  MsgArmStatusFeedback, MsgFirmwareVersion, MsgArmHighSpeedFeedback, MsgArmLowSpeedFeedback,
+  MsgJointMitCtrl, MsgJointVelAccFeedback>;
 
 /**
  * Piper message class

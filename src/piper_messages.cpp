@@ -81,6 +81,30 @@ CanIdPiper PiperMessage::message_type_to_can_id(MessageType type)
       return CanIdPiper::ARM_GRIPPER_FEEDBACK;
     case MessageType::FIRMWARE_VERSION:
       return CanIdPiper::ARM_FIRMWARE_READ;
+    case MessageType::JOINT_MIT_CTRL_1:
+      return CanIdPiper::ARM_JOINT_MIT_CTRL_1;
+    case MessageType::JOINT_MIT_CTRL_2:
+      return CanIdPiper::ARM_JOINT_MIT_CTRL_2;
+    case MessageType::JOINT_MIT_CTRL_3:
+      return CanIdPiper::ARM_JOINT_MIT_CTRL_3;
+    case MessageType::JOINT_MIT_CTRL_4:
+      return CanIdPiper::ARM_JOINT_MIT_CTRL_4;
+    case MessageType::JOINT_MIT_CTRL_5:
+      return CanIdPiper::ARM_JOINT_MIT_CTRL_5;
+    case MessageType::JOINT_MIT_CTRL_6:
+      return CanIdPiper::ARM_JOINT_MIT_CTRL_6;
+    case MessageType::JOINT_VEL_ACC_1:
+      return CanIdPiper::ARM_FEEDBACK_JOINT_VEL_ACC_1;
+    case MessageType::JOINT_VEL_ACC_2:
+      return CanIdPiper::ARM_FEEDBACK_JOINT_VEL_ACC_2;
+    case MessageType::JOINT_VEL_ACC_3:
+      return CanIdPiper::ARM_FEEDBACK_JOINT_VEL_ACC_3;
+    case MessageType::JOINT_VEL_ACC_4:
+      return CanIdPiper::ARM_FEEDBACK_JOINT_VEL_ACC_4;
+    case MessageType::JOINT_VEL_ACC_5:
+      return CanIdPiper::ARM_FEEDBACK_JOINT_VEL_ACC_5;
+    case MessageType::JOINT_VEL_ACC_6:
+      return CanIdPiper::ARM_FEEDBACK_JOINT_VEL_ACC_6;
     default:
       return CanIdPiper::ARM_STATUS_FEEDBACK;
   }
@@ -155,6 +179,32 @@ MessageType PiperMessage::can_id_to_message_type(uint32_t can_id)
       return MessageType::MOTOR_INFO_LOW_SPD;
     case static_cast<uint32_t>(CanIdPiper::ARM_FIRMWARE_READ):
       return MessageType::FIRMWARE_VERSION;
+    // MIT control commands
+    case static_cast<uint32_t>(CanIdPiper::ARM_JOINT_MIT_CTRL_1):
+      return MessageType::JOINT_MIT_CTRL_1;
+    case static_cast<uint32_t>(CanIdPiper::ARM_JOINT_MIT_CTRL_2):
+      return MessageType::JOINT_MIT_CTRL_2;
+    case static_cast<uint32_t>(CanIdPiper::ARM_JOINT_MIT_CTRL_3):
+      return MessageType::JOINT_MIT_CTRL_3;
+    case static_cast<uint32_t>(CanIdPiper::ARM_JOINT_MIT_CTRL_4):
+      return MessageType::JOINT_MIT_CTRL_4;
+    case static_cast<uint32_t>(CanIdPiper::ARM_JOINT_MIT_CTRL_5):
+      return MessageType::JOINT_MIT_CTRL_5;
+    case static_cast<uint32_t>(CanIdPiper::ARM_JOINT_MIT_CTRL_6):
+      return MessageType::JOINT_MIT_CTRL_6;
+    // Joint velocity + acceleration feedback
+    case static_cast<uint32_t>(CanIdPiper::ARM_FEEDBACK_JOINT_VEL_ACC_1):
+      return MessageType::JOINT_VEL_ACC_1;
+    case static_cast<uint32_t>(CanIdPiper::ARM_FEEDBACK_JOINT_VEL_ACC_2):
+      return MessageType::JOINT_VEL_ACC_2;
+    case static_cast<uint32_t>(CanIdPiper::ARM_FEEDBACK_JOINT_VEL_ACC_3):
+      return MessageType::JOINT_VEL_ACC_3;
+    case static_cast<uint32_t>(CanIdPiper::ARM_FEEDBACK_JOINT_VEL_ACC_4):
+      return MessageType::JOINT_VEL_ACC_4;
+    case static_cast<uint32_t>(CanIdPiper::ARM_FEEDBACK_JOINT_VEL_ACC_5):
+      return MessageType::JOINT_VEL_ACC_5;
+    case static_cast<uint32_t>(CanIdPiper::ARM_FEEDBACK_JOINT_VEL_ACC_6):
+      return MessageType::JOINT_VEL_ACC_6;
     default:
       return MessageType::UNKNOWN;
   }

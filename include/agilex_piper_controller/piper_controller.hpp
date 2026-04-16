@@ -34,9 +34,19 @@ namespace piper
 {
 
 /**
- * Main controller class for Piper robot
+ * Main controller class for the Agilex Piper robot arm.
  *
- * This class provides a high-level interface to control the Piper robot.
+ * Provides two layers of API:
+ *
+ *   1. Raw / position-mode API — joint angles in 0.001-degree protocol units,
+ *      matching the original Python piper_sdk interface.
+ *
+ *   2. SI-unit API — joint angles in radians, full RobotState snapshots, and
+ *      per-joint MIT-mode commands (position + velocity + torque feedforward).
+ *      Inspired by libfranka and arx5-sdk.
+ *
+ * CAN frames are received via a callback in the CanInterface read thread and
+ * decoded directly into the internal state protected by per-field mutexes.
  */
 class PiperController
 {
@@ -45,327 +55,233 @@ public:
    * Constructor
    *
    * Parameters:
-   *   can_interface_name - Name of the CAN interface
-   *   auto_init - Whether to automatically initialize the controller
-   *   dh_is_offset - Whether DH parameters are offset (1) or standard (0)
-   *   enable_sdk_joint_limits - Whether to enable SDK joint limits
-   *   enable_sdk_gripper_limits - Whether to enable SDK gripper limits
+   *   can_interface_name       - Name of the CAN interface (e.g. "can0")
+   *   auto_init                - Connect and start threads immediately
+   *   dh_is_offset             - DH convention flag (0: standard, 1: offset)
+   *   enable_sdk_joint_limits  - Clamp joint commands to SDK soft limits
+   *   enable_sdk_gripper_limits- Clamp gripper command to SDK soft limits
+   *   mit_cfg                  - Fixed-point encoding limits for MIT mode
    */
-  PiperController(
+  explicit PiperController(
     const std::string & can_interface_name, bool auto_init = true, int dh_is_offset = 0,
-    bool enable_sdk_joint_limits = true, bool enable_sdk_gripper_limits = true);
+    bool enable_sdk_joint_limits = true, bool enable_sdk_gripper_limits = true,
+    const MitConfig & mit_cfg = MitConfig{});
 
-  /**
-   * Destructor
-   */
   ~PiperController();
 
-  /**
-   * Connect to the CAN port
-   *
-   * Parameters:
-   *   init_can - Whether to initialize the CAN interface
-   *
-   * Returns true if successful, false otherwise
-   */
+  // ── Connection ─────────────────────────────────────────────────────────────
+
+  /** Open socket, configure CAN interface, start receive thread. */
   bool connect_port(bool init_can = true);
 
-  /**
-   * Disconnect from the CAN port
-   */
+  /** Stop threads and close socket. */
   void disconnect();
 
-  /**
-   * Check if the controller is connected
-   *
-   * Returns true if connected, false otherwise
-   */
+  /** Returns true while the CAN socket is open and the monitor thread is alive. */
   bool is_connected() const;
 
-  /**
-   * Get arm status
-   *
-   * Returns arm status
-   */
+  // ── Raw state getters (protocol units) ─────────────────────────────────────
+
   ArmStatus get_arm_status() const;
-
-  /**
-   * Get arm end pose
-   *
-   * Returns arm end pose
-   */
   ArmEndPose get_arm_end_pose() const;
-
-  /**
-   * Get arm joint angles
-   *
-   * Returns arm joint angles
-   */
   ArmJoint get_arm_joint() const;
-
-  /**
-   * Get arm gripper state
-   *
-   * Returns arm gripper state
-   */
   ArmGripper get_arm_gripper() const;
 
   /**
-   * Enable the arm
+   * Get motor information for a specific joint (1-indexed).
    *
-   * Returns true if successful, false otherwise
+   * Parameters:
+   *   joint_num - Joint number (1–6)
+   */
+  MotorInfo get_motor_info(uint8_t joint_num) const;
+
+  // ── SI-unit state API ───────────────────────────────────────────────────────
+
+  /**
+   * Return a consistent snapshot of the full robot state in SI units.
+   *
+   * Joint positions [rad] come from the joint-angle feedback (0x2A5–0x2A7).
+   * Joint velocities [rad/s] come from the joint vel/acc feedback (0x481–0x486)
+   * or fall back to the high-speed motor feedback (0x251–0x256).
+   * Joint current [A] comes from the high-speed motor feedback.
+   */
+  RobotState get_robot_state() const;
+
+  // ── Arm enable / disable ───────────────────────────────────────────────────
+
+  /**
+   * Enable all motors (joints 1–6 + gripper).
+   * Retries up to 20 times at 10 ms intervals until all drives report "enabled".
    */
   bool enable_arm();
 
   /**
-   * Disable the arm
-   *
-   * Returns true if successful, false otherwise
+   * Disable all motors.
    */
   bool disable_arm();
 
+  // ── Mode selection ─────────────────────────────────────────────────────────
+
   /**
-   * Set control mode
+   * Set control / move mode (wraps motion_control_2).
    *
    * Parameters:
-   *   ctrl_mode - Control mode (0x00: Standby, 0x01: CAN command)
-   *   move_mode - Move mode (0x00: Position, 1: Joint, 4: MIT)
-   *   move_speed_rate - Movement speed rate (0-100)
-   *   is_mit_mode - 0x00: Position-speed mode, 0xAD: MIT mode, 0xFF: Invalid
-   *
-   * Returns true if successful, false otherwise
+   *   ctrl_mode       - 0x00: standby, 0x01: CAN command control
+   *   move_mode       - 0x00: MOVE P, 0x01: MOVE J, 0x04: MOVE M (MIT)
+   *   move_speed_rate - Speed as percent (0–100); ignored in MIT mode
+   *   is_mit_mode     - 0x00: position-speed, 0xAD: MIT, 0xFF: invalid
    */
   bool set_mode(
     uint8_t ctrl_mode, uint8_t move_mode, uint8_t move_speed_rate, uint8_t is_mit_mode = 0);
 
   /**
-   * Set end pose
+   * Convenience: switch to MIT (torque) mode.
    *
-   * Parameters:
-   *   x - X position (0.001mm)
-   *   y - Y position (0.001mm)
-   *   z - Z position (0.001mm)
-   *   rx - RX rotation (0.001 degrees)
-   *   ry - RY rotation (0.001 degrees)
-   *   rz - RZ rotation (0.001 degrees)
+   * Sends motion_control_2 with move_mode=0x04 and is_mit_mode=0xAD.
+   */
+  bool enable_mit_mode();
+
+  /**
+   * Convenience: switch back to joint position mode (MOVE J).
+   */
+  bool enable_position_mode(uint8_t speed_rate = 50);
+
+  // ── Position-mode motion (raw protocol units) ──────────────────────────────
+
+  /**
+   * Set Cartesian end-effector pose.
    *
-   * Returns true if successful, false otherwise
+   * Parameters: x, y, z [0.001 mm], rx, ry, rz [0.001 deg]
    */
   bool set_end_pose(int x, int y, int z, int rx, int ry, int rz);
 
   /**
-   * Set joint angles
+   * Set joint angles in protocol units (0.001 degrees).
    *
-   * Parameters:
-   *   j1 - Joint 1 angle (0.001 degrees)
-   *   j2 - Joint 2 angle (0.001 degrees)
-   *   j3 - Joint 3 angle (0.001 degrees)
-   *   j4 - Joint 4 angle (0.001 degrees)
-   *   j5 - Joint 5 angle (0.001 degrees)
-   *   j6 - Joint 6 angle (0.001 degrees)
-   *
-   * Returns true if successful, false otherwise
+   * SDK soft limits are applied when enable_sdk_joint_limits is true.
    */
   bool set_joint_angles(int j1, int j2, int j3, int j4, int j5, int j6);
 
+  // ── SI-unit motion ─────────────────────────────────────────────────────────
+
   /**
-   * Control the gripper
+   * Set all joint angles in radians.
+   *
+   * Converts to protocol units and calls set_joint_angles().
+   * SDK soft limits are applied.
+   */
+  bool set_joint_angles_rad(const std::array<double, 6> & q_rad);
+
+  /**
+   * Send a single-joint MIT command.
+   *
+   * joint_idx is 0-based (0 = J1 … 5 = J6).
+   *
+   * The robot must be in MIT mode (enable_mit_mode()) before calling this.
+   * The internal MitConfig provides the fixed-point encoding ranges.
+   */
+  bool send_mit_cmd(int joint_idx, const MitJointCommand & cmd);
+
+  /**
+   * Send MIT commands to all six joints atomically (three CAN frames).
+   *
+   * This is the primary interface for model-based / torque-control loops.
+   */
+  bool send_mit_cmd_all(const std::array<MitJointCommand, 6> & cmds);
+
+  // ── Gripper ────────────────────────────────────────────────────────────────
+
+  /**
+   * Control the gripper.
    *
    * Parameters:
-   *   grippers_angle - Gripper angle in 0.001° units (mm)
-   *   grippers_effort - Gripper torque in 0.001N·m units (range: 0-5000)
-   *   status_code - Status code for enable/disable/clear error:
-   *                 0x00: Disable
-   *                 0x01: Enable
-   *                 0x02: Disable with clear error
-   *                 0x03: Enable with clear error
-   *   set_zero - Set current position as zero point:
-   *              0x00: Invalid
-   *              0xAE: Set zero
-   *
-   * Returns true if successful, false otherwise
+   *   grippers_angle  - Position [0.001 deg]
+   *   grippers_effort - Torque limit [0.001 Nm], range 0–5000
+   *   status_code     - 0x00 disable, 0x01 enable, 0x02 disable+clear, 0x03 enable+clear
+   *   set_zero        - 0x00 no-op, 0xAE set current position as zero
    */
   bool control_gripper(
     int grippers_angle, uint16_t grippers_effort = 1000, uint8_t status_code = 0x01,
     uint8_t set_zero = 0x00);
 
-  /**
-   * Update C-axis movement
-   *
-   * Parameters:
-   *   instruction_num - Instruction number
-   *
-   * Returns true if successful, false otherwise
-   */
+  // ── Configuration commands ─────────────────────────────────────────────────
+
   bool move_c_axis_update(uint8_t instruction_num);
 
-  /**
-   * Configure a joint
-   *
-   * Parameters:
-   *   joint_id - Joint ID
-   *   enable_pos_lim - Enable position limit
-   *   enable_vel_lim - Enable velocity limit
-   *   max_joint_acc - Maximum joint acceleration
-   *
-   * Returns true if successful, false otherwise
-   */
   bool configure_joint(
-    uint8_t joint_id, uint8_t enable_pos_lim, uint8_t enable_vel_lim, int max_joint_acc);
+    uint8_t joint_id, uint8_t set_zero, uint8_t acc_param_effective, int max_joint_acc,
+    uint8_t clear_joint_err = 0);
 
-  /**
-   * Configure crash protection
-   *
-   * Parameters:
-   *   j1_level - Joint 1 protection level
-   *   j2_level - Joint 2 protection level
-   *   j3_level - Joint 3 protection level
-   *   j4_level - Joint 4 protection level
-   *   j5_level - Joint 5 protection level
-   *   j6_level - Joint 6 protection level
-   *
-   * Returns true if successful, false otherwise
-   */
   bool configure_crash_protection(
     uint8_t j1_level, uint8_t j2_level, uint8_t j3_level, uint8_t j4_level, uint8_t j5_level,
     uint8_t j6_level);
 
-  /**
-   * Configure master-slave mode
-   *
-   * Parameters:
-   *   master_slave_mode - Master-slave mode
-   *   teach_mode - Teach mode
-   *   user_value1 - User value 1
-   *   user_value2 - User value 2
-   *
-   * Returns true if successful, false otherwise
-   */
   bool set_master_slave_config(
     uint8_t master_slave_mode, uint8_t teach_mode, uint8_t user_value1 = 0,
     uint8_t user_value2 = 0);
 
-  /**
-   * Set motion control type 1
-   *
-   * Parameters:
-   *   emergency_stop - Emergency stop control (0x00: Invalid, 0x01: Activate emergency stop, 0x02: Resume)
-   *   track_ctrl - Trajectory control instructions
-   *   grag_teach_ctrl - Drag teach control
-   *   trajectory_index - Trajectory point index (0-255)
-   *   name_index - Trajectory packet name index
-   *
-   * Returns true if successful, false otherwise
-   */
   bool motion_control_1(
     uint8_t emergency_stop, uint8_t track_ctrl = 0, uint8_t grag_teach_ctrl = 0,
     uint8_t trajectory_index = 0, uint16_t name_index = 0);
 
-  /**
-   * Set motion control type 2
-   *
-   * Parameters:
-   *   ctrl_mode - Control mode
-   *   move_mode - Move mode
-   *   move_speed_rate - Movement speed rate
-   *   is_mit_mode - MIT mode flag
-   *   residence_time - Residence time
-   *   installation_pos - Installation position
-   *
-   * Returns true if successful, false otherwise
-   */
   bool motion_control_2(
     uint8_t ctrl_mode, uint8_t move_mode, uint8_t move_speed_rate, uint8_t is_mit_mode = 0,
     uint8_t residence_time = 0, uint8_t installation_pos = 0);
 
-  /**
-   * Get firmware version
-   *
-   * Returns firmware version string
-   */
+  // ── Firmware ───────────────────────────────────────────────────────────────
+
   std::string get_firmware_version();
 
-  /**
-   * Get SDK joint limit parameters
-   *
-   * Parameters:
-   *   joint_name - Joint name (j1, j2, etc.)
-   *
-   * Returns pair of minimum and maximum joint angle (radians)
-   */
-  [[nodiscard]] std::pair<double, double> get_sdk_joint_limit_param(const std::string & joint_name);
+  // ── SDK joint-limit parameters ─────────────────────────────────────────────
 
-  /**
-   * Get SDK gripper range parameters
-   *
-   * Returns pair of minimum and maximum gripper position
-   */
+  [[nodiscard]] std::pair<double, double> get_sdk_joint_limit_param(
+    const std::string & joint_name);
   [[nodiscard]] std::pair<double, double> get_sdk_gripper_range_param();
-
-  /**
-   * Set SDK joint limit parameters
-   *
-   * Parameters:
-   *   joint_name - Joint name (j1, j2, etc.)
-   *   min_val - Minimum joint angle (radians)
-   *   max_val - Maximum joint angle (radians)
-   */
   void set_sdk_joint_limit_param(const std::string & joint_name, double min_val, double max_val);
-
-  /**
-   * Set SDK gripper range parameters
-   *
-   * Parameters:
-   *   min_val - Minimum gripper position
-   *   max_val - Maximum gripper position
-   */
   void set_sdk_gripper_range_param(double min_val, double max_val);
 
-  /**
-   * Get motor information for a specific joint
-   *
-   * Parameters:
-   *   joint_num - Joint number (1-6)
-   *
-   * Returns motor information for the specified joint
-   */
-  MotorInfo get_motor_info(uint8_t joint_num) const;
+  // ── MIT config ─────────────────────────────────────────────────────────────
+
+  void set_mit_config(const MitConfig & cfg);
+  MitConfig get_mit_config() const;
 
 private:
-  std::string can_interface_name_;  // CAN interface name
-  bool auto_init_;                  // Whether to automatically initialize
-  int dh_is_offset_;                // Whether DH parameters are offset
-  bool enable_sdk_joint_limits_;    // Whether to enable SDK joint limits
-  bool enable_sdk_gripper_limits_;  // Whether to enable SDK gripper limits
+  std::string can_interface_name_;
+  bool auto_init_;
+  int dh_is_offset_;
+  bool enable_sdk_joint_limits_;
+  bool enable_sdk_gripper_limits_;
 
-  std::unique_ptr<PiperParams> parameters_;      // Parameters
-  std::unique_ptr<PiperProtocolBase> protocol_;  // Protocol - changed from PiperProtocol
-  std::unique_ptr<CanInterface> can_interface_;  // CAN interface
+  std::unique_ptr<PiperParams> parameters_;
+  std::unique_ptr<PiperProtocolV2> protocol_;  // concrete type for set_mit_config
+  std::unique_ptr<CanInterface> can_interface_;
 
-  std::atomic<bool> running_;       // Whether the controller is running
-  std::thread read_can_thread_;     // Thread for reading CAN frames
-  std::thread can_monitor_thread_;  // Thread for monitoring CAN connection
+  std::atomic<bool> running_{false};
+  std::thread can_monitor_thread_;
 
-  mutable std::mutex arm_status_mutex_;    // Mutex for arm status
-  mutable std::mutex arm_end_pose_mutex_;  // Mutex for arm end pose
-  mutable std::mutex arm_joint_mutex_;     // Mutex for arm joint angles
-  mutable std::mutex arm_gripper_mutex_;   // Mutex for arm gripper state
-  mutable std::mutex firmware_mutex_;      // Mutex for firmware data
-  mutable std::mutex motor_info_mutex_;    // Mutex for motor information
+  // ── State (protected by individual mutexes for minimal lock contention) ────
+  mutable std::mutex arm_status_mutex_;
+  mutable std::mutex arm_end_pose_mutex_;
+  mutable std::mutex arm_joint_mutex_;
+  mutable std::mutex arm_gripper_mutex_;
+  mutable std::mutex firmware_mutex_;
+  mutable std::mutex motor_info_mutex_;
+  mutable std::mutex joint_vel_mutex_;  // joint velocity from 0x481-0x486
 
-  ArmStatus arm_status_;                 // Arm status
-  ArmEndPose arm_end_pose_;              // Arm end pose
-  ArmJoint arm_joint_;                   // Arm joint angles
-  ArmGripper arm_gripper_;               // Arm gripper state
-  std::vector<uint8_t> firmware_data_;   // Firmware data
-  std::array<MotorInfo, 6> motor_info_;  // Motor information for joints 1-6
+  ArmStatus arm_status_;
+  ArmEndPose arm_end_pose_;
+  ArmJoint arm_joint_;
+  ArmGripper arm_gripper_;
+  std::vector<uint8_t> firmware_data_;
+  std::array<MotorInfo, 6> motor_info_{};
+  std::array<double, 6> joint_vel_rad_{};   // joint velocity [rad/s] from vel/acc feedback
+  std::array<bool, 6> joint_vel_valid_{};   // true once at least one vel/acc frame arrived
 
-  void parse_can_frame(CanFrameMsg & frame);  // Parse CAN frame
+  // ── Private helpers ────────────────────────────────────────────────────────
 
-  void read_can_loop();     // Thread function for reading CAN frames
-  void can_monitor_loop();  // Thread function for monitoring CAN connection
+  void parse_can_frame(CanFrameMsg & frame);
+  void can_monitor_loop();
 
-  // Helper methods for sending commands
   bool cartesian_ctrl_xy(int x, int y);
   bool cartesian_ctrl_zrx(int z, int rx);
   bool cartesian_ctrl_ryrz(int ry, int rz);
@@ -373,8 +289,10 @@ private:
   bool joint_ctrl_34(int j3, int j4);
   bool joint_ctrl_56(int j5, int j6);
 
-  // Helper method to check joint limits
   int check_joint_sdk_limit(int joint_value, const std::string & joint_name);
+
+  /** Build and send a single MIT CAN frame for joint (0-based index). */
+  bool send_raw_mit_frame(int joint_idx, const MsgJointMitCtrl & raw);
 };
 
 }  // namespace piper

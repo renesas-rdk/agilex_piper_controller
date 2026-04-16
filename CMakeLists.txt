@@ -12,11 +12,13 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 # Dependencies
-find_package(Eigen3 REQUIRED)
+# Eigen3 is optional — only needed if you extend with kinematics/dynamics.
+find_package(Eigen3 QUIET)
 
 # Library
 add_library(${PROJECT_NAME} SHARED
   src/can_interface.cpp
+  src/mit_controller.cpp
   src/piper_controller.cpp
   src/piper_messages.cpp
   src/piper_params.cpp
@@ -35,7 +37,7 @@ target_include_directories(${PROJECT_NAME}
 # Link dependencies
 target_link_libraries(${PROJECT_NAME}
   PUBLIC
-    Eigen3::Eigen
+    $<$<TARGET_EXISTS:Eigen3::Eigen>:Eigen3::Eigen>
 )
 
 enable_testing()

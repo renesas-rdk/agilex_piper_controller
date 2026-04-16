@@ -17,6 +17,8 @@
 #pragma once
 
 // Standard library includes
+#include <array>
+#include <chrono>
 #include <cstdint>
 #include <map>
 #include <string>
@@ -182,6 +184,64 @@ enum WarningStatus
   WARNING_LOW_BATTERY = 1,  // Low battery
   WARNING_HIGH_TEMP = 2,    // High temperature
   WARNING_MOTOR_LOAD = 3    // Motor load warning
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SI-unit types (inspired by libfranka / arx5-sdk style)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Per-joint state in SI units
+ */
+struct JointState
+{
+  double position{0.0};  // Joint angle [rad]
+  double velocity{0.0};  // Joint angular velocity [rad/s]
+  double torque{0.0};    // Joint torque estimate [Nm] (from motor current, requires kt)
+  double current{0.0};   // Motor current [A]
+};
+
+/**
+ * Full robot state snapshot (libfranka-style)
+ *
+ * All values in SI units. Populated by the CAN feedback thread.
+ */
+struct RobotState
+{
+  std::array<JointState, 6> joints;           // Per-joint state
+  ArmEndPose cart_pose;                        // End-effector pose (protocol units: 0.001mm, 0.001deg)
+  ArmGripper gripper;                          // Gripper state
+  ArmStatus arm_status;                        // Controller status flags
+  std::chrono::steady_clock::time_point time;  // Timestamp of last feedback update
+};
+
+/**
+ * Per-joint MIT-mode command (arx5-sdk / Mini-Cheetah style)
+ *
+ * The robot runs a PD loop:  tau = kp * (q_des - q) + kd * (dq_des - dq) + tau_ff
+ */
+struct MitJointCommand
+{
+  double q_des{0.0};   // Desired position [rad]
+  double dq_des{0.0};  // Desired velocity [rad/s]
+  double kp{0.0};      // Position gain [Nm/rad]
+  double kd{0.0};      // Velocity (damping) gain [Nms/rad]
+  double tau_ff{0.0};  // Feedforward torque [Nm]
+};
+
+/**
+ * MIT motor CAN encoding limits
+ *
+ * These define the physical range that maps to the 12/16-bit fixed-point
+ * values packed into each MIT CAN frame.  Adjust per joint if needed.
+ */
+struct MitConfig
+{
+  double pos_max{12.5};   // Max position magnitude [rad]  → 16-bit
+  double vel_max{45.0};   // Max velocity magnitude [rad/s] → 12-bit
+  double kp_max{500.0};   // Max position gain [Nm/rad]    → 12-bit
+  double kd_max{5.0};     // Max damping gain [Nms/rad]    → 12-bit
+  double tau_max{18.0};   // Max torque magnitude [Nm]     → 12-bit
 };
 
 /**

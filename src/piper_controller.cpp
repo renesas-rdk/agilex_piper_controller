@@ -16,8 +16,8 @@
 // ********************************************************************************************************************
 #include "agilex_piper_controller/piper_controller.hpp"
 
-#include <Eigen/Dense>
 #include <chrono>
+#include <cmath>
 #include <cstring>
 #include <iostream>
 #include <thread>
@@ -29,7 +29,7 @@ namespace piper
 
 PiperController::PiperController(
   const std::string & can_interface_name, bool auto_init, int dh_is_offset,
-  bool enable_sdk_joint_limits, bool enable_sdk_gripper_limits)
+  bool enable_sdk_joint_limits, bool enable_sdk_gripper_limits, const MitConfig & mit_cfg)
 : can_interface_name_(can_interface_name),
   auto_init_(auto_init),
   dh_is_offset_(dh_is_offset),
@@ -37,22 +37,14 @@ PiperController::PiperController(
   enable_sdk_gripper_limits_(enable_sdk_gripper_limits),
   running_(false)
 {
-  // Initialize parameters
   parameters_ = std::make_unique<PiperParams>();
+  protocol_ = std::make_unique<PiperProtocolV2>(mit_cfg);
 
-  // Initialize protocol (using V2 protocol)
-  protocol_ = std::unique_ptr<PiperProtocolBase>(new PiperProtocolV2());
-
-  // Define the CAN frame callback
   auto callback = [this](CanFrameMsg & frame) { this->parse_can_frame(frame); };
-
-  // Initialize CAN interface
   can_interface_ = std::make_unique<CanInterface>(can_interface_name_, 1000000, callback);
-
-  // Initialize firmware data buffer
   firmware_data_.clear();
+  joint_vel_valid_.fill(false);
 
-  // Initialize the controller if auto_init is true
   if (auto_init_) {
     connect_port();
   }
@@ -85,9 +77,8 @@ bool PiperController::connect_port(bool init_can)
     return false;
   }
 
-  // Start monitoring threads
+  // Start monitoring thread (CAN frames are handled via callback in CanInterface)
   running_ = true;
-  read_can_thread_ = std::thread(&PiperController::read_can_loop, this);
   can_monitor_thread_ = std::thread(&PiperController::can_monitor_loop, this);
 
   return true;
@@ -97,10 +88,6 @@ void PiperController::disconnect()
 {
   // Stop monitoring threads
   running_ = false;
-
-  if (read_can_thread_.joinable()) {
-    read_can_thread_.join();
-  }
 
   if (can_monitor_thread_.joinable()) {
     can_monitor_thread_.join();
@@ -157,7 +144,7 @@ bool PiperController::enable_arm()
 
   // Create a message to enable all joints
   MsgEnableDisableArm msg_data;
-  msg_data.motor_num = 0x07;  // Enable all joints
+  msg_data.motor_num = 0xFF;  // Enable all motors (joints 1-6 + gripper)
   msg_data.enable_flag = 0x02;
   PiperMessage msg(MessageType::ENABLE_DISABLE_ARM, msg_data);
   CanFrameMsg can_frame;
@@ -218,7 +205,7 @@ bool PiperController::disable_arm()
   }
 
   MsgEnableDisableArm msg_data;
-  msg_data.motor_num = 0x07;  // Disable all joints
+  msg_data.motor_num = 0xFF;  // Disable all motors (joints 1-6 + gripper)
   msg_data.enable_flag = 0x01;
 
   PiperMessage msg(MessageType::ENABLE_DISABLE_ARM, msg_data);
@@ -322,7 +309,8 @@ bool PiperController::move_c_axis_update(uint8_t instruction_num)
 }
 
 bool PiperController::configure_joint(
-  uint8_t joint_id, uint8_t enable_pos_lim, uint8_t enable_vel_lim, int max_joint_acc)
+  uint8_t joint_id, uint8_t set_zero, uint8_t acc_param_effective, int max_joint_acc,
+  uint8_t clear_joint_err)
 {
   if (!is_connected()) {
     return false;
@@ -330,9 +318,10 @@ bool PiperController::configure_joint(
 
   MsgJointConfig msg_data;
   msg_data.joint_num = joint_id;
-  msg_data.set_zero = enable_pos_lim;
-  msg_data.acc_param_is_effective = enable_vel_lim;
-  msg_data.max_joint_acc = max_joint_acc;
+  msg_data.set_zero = set_zero;
+  msg_data.acc_param_is_effective = acc_param_effective;
+  msg_data.max_joint_acc = static_cast<uint16_t>(max_joint_acc);
+  msg_data.clear_joint_err = clear_joint_err;
 
   PiperMessage msg(MessageType::JOINT_CONFIG, msg_data);
   CanFrameMsg can_frame;
@@ -636,18 +625,28 @@ void PiperController::parse_can_frame(CanFrameMsg & frame)
         }
         break;
 
+      case MessageType::JOINT_VEL_ACC_1:
+      case MessageType::JOINT_VEL_ACC_2:
+      case MessageType::JOINT_VEL_ACC_3:
+      case MessageType::JOINT_VEL_ACC_4:
+      case MessageType::JOINT_VEL_ACC_5:
+      case MessageType::JOINT_VEL_ACC_6: {
+        uint8_t idx = frame.arbitration_id -
+                      static_cast<uint32_t>(CanIdPiper::ARM_FEEDBACK_JOINT_VEL_ACC_1);
+        if (idx < 6) {
+          if (auto data = std::get_if<MsgJointVelAccFeedback>(&msg.get_data())) {
+            // Convert from 0.001 deg/s to rad/s
+            double vel_rad = data->joint_vel * 0.001 * M_PI / 180.0;
+            std::lock_guard<std::mutex> lock(joint_vel_mutex_);
+            joint_vel_rad_[idx] = vel_rad;
+            joint_vel_valid_[idx] = true;
+          }
+        }
+      } break;
+
       default:
-        // Ignore other message types
         break;
     }
-  }
-}
-
-void PiperController::read_can_loop()
-{
-  while (running_) {
-    // This loop is empty because we use the callback mechanism for reading CAN frames
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
 }
 
@@ -792,12 +791,150 @@ int PiperController::check_joint_sdk_limit(int joint_value, const std::string & 
 MotorInfo PiperController::get_motor_info(uint8_t joint_num) const
 {
   if (joint_num < 1 || joint_num > 6) {
-    // Invalid joint number, return empty info
     return MotorInfo{};
   }
 
   std::lock_guard<std::mutex> lock(motor_info_mutex_);
-  return motor_info_[joint_num - 1];  // Array is 0-indexed, but joints are 1-indexed
+  return motor_info_[joint_num - 1];
+}
+
+// ── SI-unit API ─────────────────────────────────────────────────────────────
+
+RobotState PiperController::get_robot_state() const
+{
+  RobotState state;
+  state.time = std::chrono::steady_clock::now();
+
+  // Joint positions from arm_joint_ (protocol units → rad)
+  {
+    std::lock_guard<std::mutex> lock(arm_joint_mutex_);
+    auto vec = arm_joint_.to_vector();
+    for (int i = 0; i < 6; ++i) {
+      state.joints[i].position = vec[i] * 0.001 * M_PI / 180.0;
+    }
+  }
+
+  // Joint velocities: prefer vel/acc feedback, fall back to motor high-speed feedback.
+  // Snapshot vel data first to avoid nested locks.
+  std::array<double, 6> vel_snapshot{};
+  std::array<bool, 6> vel_valid_snapshot{};
+  {
+    std::lock_guard<std::mutex> lk(joint_vel_mutex_);
+    vel_snapshot = joint_vel_rad_;
+    vel_valid_snapshot = joint_vel_valid_;
+  }
+  {
+    std::lock_guard<std::mutex> lk(motor_info_mutex_);
+    for (int i = 0; i < 6; ++i) {
+      if (vel_valid_snapshot[i]) {
+        state.joints[i].velocity = vel_snapshot[i];
+      } else {
+        state.joints[i].velocity = motor_info_[i].motor_speed * 0.001;  // already rad/s
+      }
+      state.joints[i].current = motor_info_[i].current * 0.001;  // mA → A
+    }
+  }
+
+  // Cartesian pose
+  {
+    std::lock_guard<std::mutex> lock(arm_end_pose_mutex_);
+    state.cart_pose = arm_end_pose_;
+  }
+
+  // Gripper
+  {
+    std::lock_guard<std::mutex> lock(arm_gripper_mutex_);
+    state.gripper = arm_gripper_;
+  }
+
+  // Status
+  {
+    std::lock_guard<std::mutex> lock(arm_status_mutex_);
+    state.arm_status = arm_status_;
+  }
+
+  return state;
+}
+
+bool PiperController::set_joint_angles_rad(const std::array<double, 6> & q_rad)
+{
+  // Convert radians → protocol units (0.001 degrees)
+  auto rad_to_mdeg = [](double rad) -> int {
+    return static_cast<int>(rad * 180.0 / M_PI * 1000.0);
+  };
+
+  return set_joint_angles(
+    rad_to_mdeg(q_rad[0]), rad_to_mdeg(q_rad[1]), rad_to_mdeg(q_rad[2]), rad_to_mdeg(q_rad[3]),
+    rad_to_mdeg(q_rad[4]), rad_to_mdeg(q_rad[5]));
+}
+
+bool PiperController::enable_mit_mode()
+{
+  return set_mode(0x01, 0x04, 0, 0xAD);
+}
+
+bool PiperController::enable_position_mode(uint8_t speed_rate)
+{
+  return set_mode(0x01, 0x01, speed_rate, 0x00);
+}
+
+bool PiperController::send_raw_mit_frame(int joint_idx, const MsgJointMitCtrl & raw)
+{
+  if (joint_idx < 0 || joint_idx > 5 || !is_connected()) {
+    return false;
+  }
+
+  // Map joint_idx (0-based) → MessageType
+  static constexpr MessageType mit_types[6] = {
+    MessageType::JOINT_MIT_CTRL_1, MessageType::JOINT_MIT_CTRL_2, MessageType::JOINT_MIT_CTRL_3,
+    MessageType::JOINT_MIT_CTRL_4, MessageType::JOINT_MIT_CTRL_5, MessageType::JOINT_MIT_CTRL_6};
+
+  PiperMessage msg(mit_types[joint_idx], raw);
+  CanFrameMsg can_frame;
+
+  if (!protocol_->encode_message(msg, can_frame)) {
+    return false;
+  }
+  return can_interface_->send_message(can_frame);
+}
+
+bool PiperController::send_mit_cmd(int joint_idx, const MitJointCommand & cmd)
+{
+  if (joint_idx < 0 || joint_idx > 5) {
+    return false;
+  }
+
+  const MitConfig & cfg = protocol_->get_mit_config();
+
+  MsgJointMitCtrl raw;
+  raw.pos_int = float_to_uint(cmd.q_des, -cfg.pos_max, cfg.pos_max, 16);
+  raw.vel_int = float_to_uint(cmd.dq_des, -cfg.vel_max, cfg.vel_max, 12);
+  raw.kp_int = float_to_uint(cmd.kp, 0.0, cfg.kp_max, 12);
+  raw.kd_int = float_to_uint(cmd.kd, 0.0, cfg.kd_max, 12);
+  raw.tau_int = float_to_uint(cmd.tau_ff, -cfg.tau_max, cfg.tau_max, 12);
+
+  return send_raw_mit_frame(joint_idx, raw);
+}
+
+bool PiperController::send_mit_cmd_all(const std::array<MitJointCommand, 6> & cmds)
+{
+  bool ok = true;
+  for (int i = 0; i < 6; ++i) {
+    if (!send_mit_cmd(i, cmds[i])) {
+      ok = false;
+    }
+  }
+  return ok;
+}
+
+void PiperController::set_mit_config(const MitConfig & cfg)
+{
+  protocol_->set_mit_config(cfg);
+}
+
+MitConfig PiperController::get_mit_config() const
+{
+  return protocol_->get_mit_config();
 }
 
 }  // namespace piper
